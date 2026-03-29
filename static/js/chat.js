@@ -383,9 +383,9 @@ function renderHistorySidebar(filter = '') {
       </button>
     `;
 
-    item.querySelector('.history-item-del').addEventListener('click', (e) => {
+    item.querySelector('.history-item-del').addEventListener('click', async (e) => {
       e.stopPropagation();
-      History.remove(conv.id);
+      await History.remove(conv.id);
       if (currentConvId === conv.id) startNewChat();
       else renderHistorySidebar(searchInput.value);
     });
@@ -421,6 +421,13 @@ function loadConversation(id) {
   messagesContainer.querySelectorAll('.message-row').forEach(e => e.remove());
   emptyState.classList.add('hidden');
   conv.messages.forEach(msg => renderMessage(msg.role, msg.content, msg.attachments));
+  
+  // Sync Model Pill
+  if (conv.model) {
+      selectedModelId = conv.model;
+      modelPillLabel.textContent = conv.model;
+  }
+  
   scrollToBottom(false);
   renderHistorySidebar(searchInput.value);
 }
@@ -496,7 +503,8 @@ async function sendMessage() {
   if (!text && pendingAttachments.length === 0) return;
 
   if (!currentConvId) {
-    const conv = History.create();
+    const modelToUse = selectedModelId || currentUser?.model || 'gpt-4o';
+    const conv = await History.create('新对话', modelToUse);
     currentConvId = conv.id;
   }
 
@@ -516,7 +524,7 @@ async function sendMessage() {
     userContent = fullText;
   }
 
-  History.addMessage(currentConvId, { role: 'user', content: userContent, attachments: attachmentsCopy });
+  await History.addMessage(currentConvId, { role: 'user', content: userContent, attachments: attachmentsCopy }, selectedModelId);
   renderMessage('user', userContent, attachmentsCopy);
 
   chatInput.value = '';
@@ -591,7 +599,28 @@ async function sendMessage() {
     } else if (fullText) {
       contentEl.innerHTML = parseMarkdown(fullText);
     }
-    if (fullText) History.addMessage(currentConvId, { role: 'assistant', content: fullText });
+    if (fullText) await History.addMessage(currentConvId, { role: 'assistant', content: fullText }, selectedModelId);
+
+    // AI Title Generation (Background)
+    const currentConv = History.get(currentConvId);
+    if (currentConv && currentConv.messages.length === 2) {
+        (async () => {
+            try {
+                const titleRes = await fetch(`/api/history/${currentConvId}/generate_title`, {
+                   method: 'POST',
+                   headers: { 'Content-Type': 'application/json' },
+                   body: JSON.stringify({ messages: currentConv.messages, model: selectedModelId })
+                });
+                if (titleRes.ok) {
+                    const data = await titleRes.json();
+                    if (data.title) {
+                        currentConv.title = data.title;
+                        renderHistorySidebar(searchInput.value);
+                    }
+                }
+            } catch (e) { console.warn('Title gen failed', e); }
+        })();
+    }
 
     setStreaming(false);
     renderHistorySidebar(searchInput.value);
@@ -730,6 +759,7 @@ window.addEventListener('resize', () => {
 (async () => {
   await loadUser();
   await loadModels();
+  await History.loadFromServer();
   renderHistorySidebar();
   
   if (wasMobile) {

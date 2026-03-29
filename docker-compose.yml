@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: aichat-db
+    restart: always
+    environment:
+      POSTGRES_USER: ai_chat
+      POSTGRES_PASSWORD: ai_chat
+      POSTGRES_DB: ai_chat
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - aichat-network
+
+  app:
+    build: .
+    container_name: aichat-app
+    restart: always
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://ai_chat:ai_chat@db:5432/ai_chat
+    volumes:
+      - ./data:/app/data
+    networks:
+      - aichat-network
+
+networks:
+  aichat-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

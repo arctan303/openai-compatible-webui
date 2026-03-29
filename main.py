@@ -210,6 +210,64 @@ async def chat_stream(body: ChatRequest, user=Depends(get_current_user)):
 
 
 # ─────────────────────────────────────────────
+# AI Title Generation
+# ─────────────────────────────────────────────
+
+class GenerateTitleRequest(BaseModel):
+    messages: List[Message]
+    model: Optional[str] = None
+
+
+@app.post("/api/history/{conv_id}/generate_title")
+async def generate_title(conv_id: str, body: GenerateTitleRequest, user=Depends(get_current_user)):
+    admin_cfg = await database.get_admin_config()
+    if not admin_cfg:
+        raise HTTPException(status_code=500, detail="系统未配置")
+
+    api_base = admin_cfg["api_base"].rstrip("/")
+    api_key = user["api_key"] if user["api_key"] else admin_cfg["api_key"]
+    model = body.model or user["model"]
+
+    # Simple prompt for title generation
+    messages = [
+        {"role": "system", "content": "你是一个标题生成助手。请根据用户提供的对话片段，生成一个极其简短、有吸引力且准确的对话标题（不超过10个字）。直接返回标题文本，不要包含引号或任何解释。"},
+    ]
+    # Only take first few messages to save tokens and context
+    messages.extend([m.model_dump() for m in body.messages[:2]])
+    messages.append({"role": "user", "content": "请为以上对话生成一个简减短的标题。"})
+
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": 0.5,
+        "max_tokens": 50,
+        "stream": False
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"{api_base}/chat/completions",
+                json=payload,
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            title = data["choices"][0]["message"]["content"].strip().strip('"').strip('《》')
+            
+            # Update database
+            conv = await database.get_conversations(user["id"])
+            target = next((c for c in conv if c["id"] == conv_id), None)
+            if target:
+                await database.save_conversation(conv_id, user["id"], title, target["messages"], target["model"])
+            
+            return {"title": title}
+    except Exception as e:
+        print(f"Title generation failed: {e}")
+        return {"title": None}
+
+
+# ─────────────────────────────────────────────
 # Models list
 # ─────────────────────────────────────────────
 
@@ -392,6 +450,34 @@ async def delete_user(user_id: int, admin=Depends(require_admin)):
     if user_id == admin["id"]:
         raise HTTPException(status_code=400, detail="不能删除自己")
     await database.delete_user(user_id)
+    return {"ok": True}
+
+
+# ─────────────────────────────────────────────
+# Chat History Sync API
+# ─────────────────────────────────────────────
+
+class SaveHistoryRequest(BaseModel):
+    title: str
+    messages: list
+    model: str
+
+
+@app.get("/api/history")
+async def get_history(user=Depends(get_current_user)):
+    conversations = await database.get_conversations(user["id"])
+    return conversations
+
+
+@app.post("/api/history/{conv_id}")
+async def save_history(conv_id: str, body: SaveHistoryRequest, user=Depends(get_current_user)):
+    await database.save_conversation(conv_id, user["id"], body.title, body.messages, body.model)
+    return {"ok": True}
+
+
+@app.delete("/api/history/{conv_id}")
+async def delete_history_route(conv_id: str, user=Depends(get_current_user)):
+    await database.delete_conversation(conv_id, user["id"])
     return {"ok": True}
 
 

@@ -1,88 +1,98 @@
-import aiosqlite
+import asyncpg
 import os
+import json
 from config import DATABASE_URL
 from passlib.context import CryptContext
+from dotenv import load_dotenv
+
+load_dotenv()
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+DB_URL = os.getenv("DATABASE_URL", DATABASE_URL)
+
+async def get_db_pool():
+    if not hasattr(get_db_pool, "_pool"):
+        get_db_pool._pool = await asyncpg.create_pool(DB_URL)
+    return get_db_pool._pool
 
 async def init_db():
-    os.makedirs(os.path.dirname(DATABASE_URL) if os.path.dirname(DATABASE_URL) else ".", exist_ok=True)
-    async with aiosqlite.connect(DATABASE_URL) as db:
-        await db.execute("""
+    pool = await get_db_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL,
-                api_key TEXT NOT NULL,
-                api_base TEXT DEFAULT 'https://api.openai.com/v1',
-                model TEXT DEFAULT 'gpt-4o',
-                allowed_models TEXT DEFAULT NULL,
-                is_admin INTEGER DEFAULT 0,
-                created_at TEXT DEFAULT (datetime('now'))
+                id SERIAL PRIMARY KEY,
+                username VARCHAR UNIQUE NOT NULL,
+                password VARCHAR NOT NULL,
+                api_key VARCHAR,
+                api_base VARCHAR DEFAULT 'https://api.openai.com/v1',
+                model VARCHAR DEFAULT 'gpt-4o',
+                allowed_models VARCHAR DEFAULT NULL,
+                is_admin SMALLINT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        await db.commit()
 
-        # Migration: add allowed_models column if missing
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS conversations (
+                id VARCHAR PRIMARY KEY,
+                user_id INT REFERENCES users(id) ON DELETE CASCADE,
+                title VARCHAR NOT NULL,
+                messages JSONB NOT NULL DEFAULT '[]',
+                model VARCHAR NOT NULL DEFAULT 'gpt-4o',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
         try:
-            await db.execute("ALTER TABLE users ADD COLUMN allowed_models TEXT DEFAULT NULL")
-            await db.commit()
+            await conn.execute("ALTER TABLE conversations ADD COLUMN model VARCHAR NOT NULL DEFAULT 'gpt-4o'")
         except Exception:
-            pass  # Column already exists
+            pass
 
-        # Create default admin if no users exist
-        cursor = await db.execute("SELECT COUNT(*) FROM users")
-        count = (await cursor.fetchone())[0]
+        try:
+            await conn.execute("ALTER TABLE users ADD COLUMN allowed_models VARCHAR DEFAULT NULL")
+        except asyncpg.exceptions.DuplicateColumnError:
+            pass
+        except Exception:
+            pass
+
+        count = await conn.fetchval("SELECT COUNT(*) FROM users")
         if count == 0:
             hashed = pwd_context.hash("admin123")
-            await db.execute(
-                "INSERT INTO users (username, password, api_key, api_base, model, is_admin) VALUES (?, ?, ?, ?, ?, ?)",
-                ("admin", hashed, "sk-kD3ZqjwMCrEQzTBVQ", "https://api.arctan.top/v1", "gpt-4o", 1)
+            await conn.execute(
+                "INSERT INTO users (username, password, api_key, api_base, model, is_admin) VALUES ($1, $2, $3, $4, $5, $6)",
+                "admin", hashed, "sk-kD3ZqjwMCrEQzTBVQ", "https://api.arctan.top/v1", "gpt-4o", 1
             )
-            await db.commit()
             print("✅ Default admin created: admin / admin123")
 
-
 async def get_user_by_username(username: str):
-    async with aiosqlite.connect(DATABASE_URL) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute("SELECT * FROM users WHERE username = ?", (username,))
-        row = await cursor.fetchone()
-        return dict(row) if row else None
-
+    pool = await get_db_pool()
+    row = await pool.fetchrow("SELECT * FROM users WHERE username = $1", username)
+    return dict(row) if row else None
 
 async def get_user_by_id(user_id: int):
-    async with aiosqlite.connect(DATABASE_URL) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-        row = await cursor.fetchone()
-        return dict(row) if row else None
+    pool = await get_db_pool()
+    row = await pool.fetchrow("SELECT * FROM users WHERE id = $1", user_id)
+    return dict(row) if row else None
 
 async def get_admin_config():
-    async with aiosqlite.connect(DATABASE_URL) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute("SELECT api_base, api_key FROM users WHERE is_admin = 1 ORDER BY id ASC LIMIT 1")
-        row = await cursor.fetchone()
-        return dict(row) if row else None
+    pool = await get_db_pool()
+    row = await pool.fetchrow("SELECT api_base, api_key FROM users WHERE is_admin = 1 ORDER BY id ASC LIMIT 1")
+    return dict(row) if row else None
 
 async def get_all_users():
-    async with aiosqlite.connect(DATABASE_URL) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute("SELECT id, username, api_key, api_base, model, allowed_models, is_admin, created_at FROM users ORDER BY id")
-        rows = await cursor.fetchall()
-        return [dict(r) for r in rows]
-
+    pool = await get_db_pool()
+    rows = await pool.fetch("SELECT id, username, api_key, api_base, model, allowed_models, is_admin, created_at FROM users ORDER BY id")
+    return [dict(r) for r in rows]
 
 async def create_user(username: str, password: str, api_key: str = "", api_base: str = "", model: str = "gpt-4o", is_admin: int = 0, allowed_models: str = None):
     hashed = pwd_context.hash(password)
-    async with aiosqlite.connect(DATABASE_URL) as db:
-        await db.execute(
-            "INSERT INTO users (username, password, api_key, api_base, model, allowed_models, is_admin) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (username, hashed, api_key, api_base, model, allowed_models, is_admin)
-        )
-        await db.commit()
-
+    pool = await get_db_pool()
+    await pool.execute(
+        "INSERT INTO users (username, password, api_key, api_base, model, allowed_models, is_admin) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        username, hashed, api_key, api_base, model, allowed_models, is_admin
+    )
 
 async def update_user(user_id: int, data: dict):
     if "password" in data and data["password"]:
@@ -93,18 +103,57 @@ async def update_user(user_id: int, data: dict):
     if not data:
         return
 
-    fields = ", ".join(f"{k} = ?" for k in data)
-    values = list(data.values()) + [user_id]
-    async with aiosqlite.connect(DATABASE_URL) as db:
-        await db.execute(f"UPDATE users SET {fields} WHERE id = ?", values)
-        await db.commit()
-
+    pool = await get_db_pool()
+    set_clauses = []
+    values = []
+    for i, (k, v) in enumerate(data.items(), 1):
+        set_clauses.append(f"{k} = ${i}")
+        values.append(v)
+    
+    values.append(user_id)
+    fields = ", ".join(set_clauses)
+    query = f"UPDATE users SET {fields} WHERE id = ${len(values)}"
+    
+    await pool.execute(query, *values)
 
 async def delete_user(user_id: int):
-    async with aiosqlite.connect(DATABASE_URL) as db:
-        await db.execute("DELETE FROM users WHERE id = ?", (user_id,))
-        await db.commit()
-
+    pool = await get_db_pool()
+    await pool.execute("DELETE FROM users WHERE id = $1", user_id)
 
 def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
+
+async def get_conversations(user_id: int):
+    pool = await get_db_pool()
+    rows = await pool.fetch("SELECT id, title, messages, model, created_at, updated_at FROM conversations WHERE user_id = $1 ORDER BY updated_at DESC", user_id)
+    return [
+        {
+            "id": r["id"],
+            "title": r["title"],
+            "messages": json.loads(r["messages"]) if isinstance(r["messages"], str) else (r["messages"] or []),
+            "model": r["model"],
+            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            "updated_at": r["updated_at"].isoformat() if r["updated_at"] else None
+        }
+        for r in rows
+    ]
+
+async def save_conversation(conv_id: str, user_id: int, title: str, messages: list, model: str):
+    pool = await get_db_pool()
+    msg_json = json.dumps(messages)
+    await pool.execute(
+        """
+        INSERT INTO conversations (id, user_id, title, messages, model, updated_at) 
+        VALUES ($1, $2, $3, $4::jsonb, $5, CURRENT_TIMESTAMP)
+        ON CONFLICT (id) DO UPDATE SET 
+            title = EXCLUDED.title, 
+            messages = EXCLUDED.messages, 
+            model = EXCLUDED.model,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        conv_id, user_id, title, msg_json, model
+    )
+
+async def delete_conversation(conv_id: str, user_id: int):
+    pool = await get_db_pool()
+    await pool.execute("DELETE FROM conversations WHERE id = $1 AND user_id = $2", conv_id, user_id)

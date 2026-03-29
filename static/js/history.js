@@ -1,48 +1,63 @@
 /**
- * history.js — localStorage conversation manager
+ * history.js — Cloud-synced conversation manager
  */
 
-const STORAGE_KEY = 'aichat_conversations';
-
 const History = (() => {
-  function load() {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-    } catch { return []; }
-  }
+  let conversations = [];
 
-  function save(conversations) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations));
+  async function loadFromServer() {
+    try {
+      const res = await fetch('/api/history');
+      if (res.ok) {
+        conversations = await res.json();
+      }
+    } catch (e) {
+      console.error('Failed to load history from cloud', e);
+    }
+    return conversations;
   }
 
   function getAll() {
-    return load().sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+    return conversations;
   }
 
   function get(id) {
-    return load().find(c => c.id === id) || null;
+    return conversations.find(c => c.id === id) || null;
   }
 
-  function create(title = '新对话') {
+  async function create(title = '新对话', model = 'gpt-4o') {
     const conv = {
       id: crypto.randomUUID(),
       title,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
       messages: [],
+      model,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     };
-    const all = load();
-    all.push(conv);
-    save(all);
+    conversations.unshift(conv);
+    saveToServer(conv);
     return conv;
   }
 
-  function addMessage(convId, message) {
-    const all = load();
-    const conv = all.find(c => c.id === convId);
+  async function saveToServer(conv) {
+    try {
+      await fetch(`/api/history/${conv.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: conv.title, messages: conv.messages, model: conv.model })
+      });
+    } catch (e) {
+      console.error('Failed to sync history to cloud', e);
+    }
+  }
+
+  async function addMessage(convId, message, model = null) {
+    const conv = conversations.find(c => c.id === convId);
     if (!conv) return;
     conv.messages.push(message);
+    if (model) conv.model = model;
     conv.updated_at = new Date().toISOString();
+    
     // Auto-generate title from first user message
     if (conv.messages.length === 1 && message.role === 'user') {
       const text = typeof message.content === 'string'
@@ -50,30 +65,37 @@ const History = (() => {
         : (message.content.find(c => c.type === 'text')?.text || '新对话');
       conv.title = text.slice(0, 40) + (text.length > 40 ? '…' : '');
     }
-    save(all);
+    
+    // Sort to top
+    conversations = [conv, ...conversations.filter(c => c.id !== conv.id)];
+    
+    saveToServer(conv);
     return conv;
   }
 
-  function updateAssistantMessage(convId, content) {
-    const all = load();
-    const conv = all.find(c => c.id === convId);
+  async function updateAssistantMessage(convId, content) {
+    const conv = conversations.find(c => c.id === convId);
     if (!conv) return;
     const last = conv.messages[conv.messages.length - 1];
     if (last && last.role === 'assistant') {
       last.content = content;
       conv.updated_at = new Date().toISOString();
+      saveToServer(conv);
     }
-    save(all);
   }
 
-  function remove(id) {
-    const all = load().filter(c => c.id !== id);
-    save(all);
+  async function remove(id) {
+    conversations = conversations.filter(c => c.id !== id);
+    try {
+      await fetch(`/api/history/${id}`, { method: 'DELETE' });
+    } catch (e) {
+      console.error('Delete sync failed', e);
+    }
   }
 
   function clear() {
-    localStorage.removeItem(STORAGE_KEY);
+    conversations = [];
   }
 
-  return { getAll, get, create, addMessage, updateAssistantMessage, remove, clear };
+  return { loadFromServer, getAll, get, create, addMessage, updateAssistantMessage, remove, clear };
 })();
