@@ -5,6 +5,16 @@
 const History = (() => {
   let conversations = [];
 
+  function createConversationId() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+      return window.crypto.randomUUID();
+    }
+
+    // Fallback for older browsers or restricted environments.
+    const rand = () => Math.random().toString(16).slice(2, 10);
+    return `${Date.now().toString(16)}-${rand()}-${rand()}`;
+  }
+
   async function loadFromServer() {
     try {
       const res = await fetch('/api/history');
@@ -27,7 +37,7 @@ const History = (() => {
 
   async function create(title = '新对话', model = 'gpt-4o') {
     const conv = {
-      id: crypto.randomUUID(),
+      id: createConversationId(),
       title,
       messages: [],
       model,
