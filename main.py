@@ -29,6 +29,20 @@ app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
+def parse_model_aliases(raw_value) -> dict:
+    if not raw_value:
+        return {}
+    if isinstance(raw_value, dict):
+        return {str(k): str(v) for k, v in raw_value.items() if str(k).strip() and str(v).strip()}
+    try:
+        parsed = json.loads(raw_value)
+    except Exception:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    return {str(k): str(v) for k, v in parsed.items() if str(k).strip() and str(v).strip()}
+
+
 # ─────────────────────────────────────────────
 # Auth helpers
 # ─────────────────────────────────────────────
@@ -128,6 +142,7 @@ async def logout(response: Response):
 @app.get("/api/auth/me")
 async def me(user=Depends(get_current_user)):
     system_cfg = await database.get_system_config()
+    model_aliases = parse_model_aliases(system_cfg.get("model_aliases") if system_cfg else None)
     allowed = None
     if user.get("allowed_models"):
         try:
@@ -140,6 +155,7 @@ async def me(user=Depends(get_current_user)):
         "model": user["model"],
         "api_base": system_cfg["api_base"] if system_cfg else "",
         "system_default_model": system_cfg["default_model"] if system_cfg else "gpt-4o",
+        "model_aliases": model_aliases,
         "allowed_models": allowed,
         "is_admin": bool(user["is_admin"])
     }
@@ -282,6 +298,7 @@ async def get_models(user=Depends(get_current_user)):
     system_cfg = await database.get_system_config()
     if not system_cfg:
         raise HTTPException(status_code=500, detail="系统未配置")
+    model_aliases = parse_model_aliases(system_cfg.get("model_aliases"))
         
     api_base = system_cfg["api_base"].rstrip("/")
     api_key = user["api_key"] if user["api_key"] else system_cfg["api_key"]
@@ -304,6 +321,9 @@ async def get_models(user=Depends(get_current_user)):
                         models = [m for m in models if m["id"] in allowed]
                 except Exception:
                     pass
+
+            for model in models:
+                model["display_name"] = model_aliases.get(model["id"], model["id"])
 
             return {"data": models}
     except httpx.HTTPStatusError as e:
@@ -383,6 +403,7 @@ class SystemConfigRequest(BaseModel):
     api_base: str
     api_key: str = ""
     default_model: str = "gpt-4o"
+    model_aliases: Optional[dict] = None
 
 
 @app.get("/api/admin/system")
@@ -399,6 +420,7 @@ async def get_admin_system(admin=Depends(require_admin)):
         "api_base": system_cfg["api_base"],
         "api_key": masked_key,
         "default_model": system_cfg["default_model"],
+        "model_aliases": parse_model_aliases(system_cfg.get("model_aliases")),
     }
 
 
@@ -407,6 +429,7 @@ async def update_admin_system(body: SystemConfigRequest, admin=Depends(require_a
     data = {
         "api_base": body.api_base.strip(),
         "default_model": body.default_model.strip() or "gpt-4o",
+        "model_aliases": json.dumps(parse_model_aliases(body.model_aliases)),
     }
     if body.api_key and "*" in body.api_key:
         pass

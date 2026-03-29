@@ -10,6 +10,7 @@ let abortController = null;
 let pendingAttachments = [];
 let allConvs = [];
 let selectedModelId = null;
+let modelDisplayMap = {};
 
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
 const sidebar         = document.getElementById('sidebar');
@@ -101,6 +102,11 @@ function parseMarkdown(text) {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function getModelLabel(modelId) {
+  if (!modelId) return '模型';
+  return modelDisplayMap[modelId] || modelId;
 }
 
 function scrollToBottom(smooth = true) {
@@ -264,6 +270,7 @@ async function loadUser() {
     const res = await fetch('/api/auth/me');
     if (!res.ok) { window.location.href = '/'; return; }
     currentUser = await res.json();
+    modelDisplayMap = currentUser.model_aliases || {};
     const shortName = currentUser.username.substring(0, 2).toUpperCase();
     userNameDisplay.textContent = currentUser.username;
     dropdownName.textContent = currentUser.username;
@@ -289,17 +296,21 @@ async function loadModels() {
 
     modelDropdownList.innerHTML = '';
     if (models.length === 0) {
-        models = [{ id: currentUser?.model || 'gpt-4o' }];
+        const fallbackId = currentUser?.model || 'gpt-4o';
+        models = [{ id: fallbackId, display_name: getModelLabel(fallbackId) }];
     }
     
     models.forEach(m => {
+        if (m.display_name) {
+            modelDisplayMap[m.id] = m.display_name;
+        }
         const item = document.createElement('div');
         item.className = 'px-4 py-3 mx-2 my-1 hover:bg-gray-100 rounded-lg cursor-pointer flex items-center text-sm font-medium text-gray-800 transition-colors gap-3';
-        item.innerHTML = `<i data-lucide="sparkles" class="w-4 h-4 text-purple-500"></i><span class="truncate">${esc(m.id)}</span>`;
+        item.innerHTML = `<i data-lucide="sparkles" class="w-4 h-4 text-sky-500"></i><span class="truncate">${esc(m.display_name || getModelLabel(m.id))}</span>`;
         item.onclick = (e) => {
             e.stopPropagation();
             selectedModelId = m.id;
-            modelPillLabel.textContent = m.id;
+            modelPillLabel.textContent = getModelLabel(m.id);
             modelDropdown.classList.add('hidden');
         };
         modelDropdownList.appendChild(item);
@@ -308,12 +319,12 @@ async function loadModels() {
     });
     
     if (!selectedModelId && models.length > 0) selectedModelId = models[0].id;
-    modelPillLabel.textContent = selectedModelId || 'ChatGPT';
+    modelPillLabel.textContent = getModelLabel(selectedModelId);
     
     if (window.lucide) window.lucide.createIcons();
   } catch {
     selectedModelId = currentUser?.model || 'gpt-4o';
-    modelPillLabel.textContent = selectedModelId;
+    modelPillLabel.textContent = getModelLabel(selectedModelId);
   }
 }
 
@@ -425,7 +436,7 @@ function loadConversation(id) {
   // Sync Model Pill
   if (conv.model) {
       selectedModelId = conv.model;
-      modelPillLabel.textContent = conv.model;
+      modelPillLabel.textContent = getModelLabel(conv.model);
   }
   
   scrollToBottom(false);

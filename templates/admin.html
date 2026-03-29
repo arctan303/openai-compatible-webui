@@ -38,6 +38,13 @@
             <label class="form-label" for="sys-default-model">系统默认模型</label>
             <input id="sys-default-model" class="form-input" type="text" placeholder="gpt-4o" />
           </div>
+          <div class="form-group">
+            <label class="form-label" for="sys-model-aliases">模型映射表</label>
+            <textarea id="sys-model-aliases" class="form-input" rows="8" placeholder='{"gpt-4o":"通用模型","gpt-4.1":"高质量模型"}' style="resize:vertical;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"></textarea>
+            <p style="font-size:.75rem;color:var(--text-muted);margin-top:.4rem">
+              使用 JSON 对象配置。键是实际模型 ID，值是前端显示名称。
+            </p>
+          </div>
           <p class="error-message" id="system-error"></p>
           <div class="modal-actions" style="padding:0;margin-top:1rem">
             <button type="button" class="btn btn-ghost btn-sm" id="system-fetch-models">从当前系统配置获取模型列表</button>
@@ -147,7 +154,7 @@
     let editingId = null;
     let fetchedModels = [];
     let currentAllowedModels = [];
-    let systemConfig = { api_base: '', api_key: '', default_model: 'gpt-4o' };
+    let systemConfig = { api_base: '', api_key: '', default_model: 'gpt-4o', model_aliases: {} };
 
     const modal = document.getElementById('user-modal');
     const modalTitleTxt = document.getElementById('modal-title-text');
@@ -182,6 +189,7 @@
       document.getElementById('sys-api-base').value = systemConfig.api_base || '';
       document.getElementById('sys-api-key').value = systemConfig.api_key || '';
       document.getElementById('sys-default-model').value = systemConfig.default_model || 'gpt-4o';
+      document.getElementById('sys-model-aliases').value = JSON.stringify(systemConfig.model_aliases || {}, null, 2);
     }
 
     async function loadUsers() {
@@ -359,7 +367,22 @@
         api_base: document.getElementById('sys-api-base').value.trim(),
         api_key: document.getElementById('sys-api-key').value.trim(),
         default_model: document.getElementById('sys-default-model').value.trim() || 'gpt-4o',
+        model_aliases: {},
       };
+
+      const aliasesRaw = document.getElementById('sys-model-aliases').value.trim();
+      if (aliasesRaw) {
+        try {
+          const parsed = JSON.parse(aliasesRaw);
+          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            throw new Error('模型映射表必须是 JSON 对象');
+          }
+          body.model_aliases = parsed;
+        } catch (err) {
+          systemError.textContent = err.message || '模型映射表格式错误';
+          return;
+        }
+      }
 
       const res = await fetch('/api/admin/system', {
         method: 'PUT',

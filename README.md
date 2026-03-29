@@ -1,15 +1,39 @@
 # AI Chat
 
-一个基于 FastAPI + PostgreSQL + Vanilla JS 的聊天系统，支持流式对话、历史同步、模型白名单和管理后台。
+一个基于 FastAPI 的聊天系统，支持两种数据库模式：
 
-## 配置规则
+- 本地开发：SQLite，零依赖，按需启动
+- 生产部署：PostgreSQL
 
-项目现在采用两层配置边界：
+## 本地开发
 
-- `.env` 只负责启动期配置和首个管理员初始化
+本地默认直接使用 SQLite 文件，不需要常驻 PostgreSQL。
+
+1. 安装 Python 3.11
+2. 创建虚拟环境并安装依赖
+3. 复制 `.env.example` 为 `.env`
+4. 启动：
+
+```bash
+python main.py
+```
+
+默认数据库文件为 `data/chat.db`。不用时直接关闭进程即可，没有额外数据库服务需要常驻。
+
+## 生产部署
+
+生产环境继续使用 PostgreSQL，只需要把 `DATABASE_URL` 配成：
+
+```env
+DATABASE_URL=postgresql://ai_chat:your_password@localhost:5432/ai_chat
+```
+
+其余规则不变：
+
+- `.env` 只负责启动期配置和首次初始化
 - 数据库负责系统运行配置和用户业务配置
 
-### `.env` 中保留的内容
+## `.env` 中保留的内容
 
 - `DATABASE_URL`
 - `SECRET_KEY`
@@ -19,12 +43,7 @@
 - `BOOTSTRAP_SYSTEM_API_BASE`
 - `BOOTSTRAP_SYSTEM_MODEL`
 
-其中：
-
-- `DATABASE_URL` 和 `SECRET_KEY` 每次启动都会读取
-- `BOOTSTRAP_*` 只在数据库首次初始化时用于写入默认数据
-
-### 数据库中的运行配置
+## 运行期数据库配置
 
 - `system_config` 表：
   - 系统 `api_base`
@@ -35,17 +54,3 @@
   - 用户专用 `api_key`
   - 用户默认模型
   - 用户模型白名单
-
-系统启动后，聊天和模型列表接口统一读取数据库里的 `system_config`，不再依赖 `.env` 中的系统 API 配置。
-
-## 快速启动
-
-1. 复制 `.env.example` 为 `.env`
-2. 按需修改数据库连接、`SECRET_KEY` 和 bootstrap 管理员账号
-3. 启动：
-
-```bash
-docker compose up -d
-```
-
-首次启动后，登录后台即可在数据库中维护系统 API 配置和默认模型。
