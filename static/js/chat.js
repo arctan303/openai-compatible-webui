@@ -1,6 +1,6 @@
 /**
  * chat.js — React Demo Integrated Interface Logic
- * Version: 2.2-Theme
+ * Version: 2.5-History-Optimized
  */
 
 // ─── State ────────────────────────────────────────────────────────────────────
@@ -19,6 +19,8 @@ const sidebarOpen     = document.getElementById('sidebar-open');
 const sidebarClose    = document.getElementById('sidebar-close');
 const historyList     = document.getElementById('history-list');
 const historyEmpty    = document.getElementById('history-empty');
+const historyLoading  = document.getElementById('history-loading');
+const refreshHistoryBtn = document.getElementById('refresh-history-btn');
 const newChatBtn      = document.getElementById('new-chat-btn');
 const searchInput     = document.getElementById('search-input');
 const userAvatar      = document.getElementById('user-avatar');
@@ -131,7 +133,6 @@ function updateSendBtn() {
   } else if ((hasText || hasAttach) && !isUploading) {
       sendBtn.disabled = false;
       sendBtn.classList.remove('opacity-50');
-      // Dynamic styles for light/dark
       if (document.documentElement.classList.contains('dark')) {
           sendBtn.classList.add('bg-white', 'text-black');
           sendBtn.classList.remove('bg-black', 'text-white');
@@ -358,7 +359,7 @@ document.addEventListener('click', (e) => {
   if (!userMenu.contains(e.target) && !userBtn.contains(e.target)) {
       userMenu.classList.add('hidden');
   }
-  if (!modelPillBtn.contains(e.target) && modelDropdown && !modelDropdown.contains(e.target)) {
+  if (modelPillBtn && !modelPillBtn.contains(e.target) && modelDropdown && !modelDropdown.contains(e.target)) {
       modelDropdown.classList.add('hidden');
   }
 });
@@ -370,6 +371,26 @@ logoutBtn.addEventListener('click', async () => {
 });
 
 // ─── History sidebar ──────────────────────────────────────────────────────────
+async function refreshHistory(filter = '') {
+  if (refreshHistoryBtn) {
+      refreshHistoryBtn.classList.add('animate-spin-fast');
+      refreshHistoryBtn.disabled = true;
+  }
+  if (historyLoading) historyLoading.classList.remove('hidden');
+  if (historyEmpty) historyEmpty.classList.add('hidden');
+  
+  try {
+    await History.loadFromServer();
+    renderHistorySidebar(filter);
+  } finally {
+    if (historyLoading) historyLoading.classList.add('hidden');
+    if (refreshHistoryBtn) {
+        refreshHistoryBtn.classList.remove('animate-spin-fast');
+        refreshHistoryBtn.disabled = false;
+    }
+  }
+}
+
 function renderHistorySidebar(filter = '') {
   allConvs = History.getAll();
   const filtered = filter
@@ -377,7 +398,7 @@ function renderHistorySidebar(filter = '') {
     : allConvs;
 
   historyList.querySelectorAll('.history-item').forEach(el => el.remove());
-  historyEmpty.classList.toggle('hidden', filtered.length > 0);
+  if (historyEmpty) historyEmpty.classList.toggle('hidden', filtered.length > 0);
 
   filtered.forEach(conv => {
     const item = document.createElement('div');
@@ -397,48 +418,52 @@ function renderHistorySidebar(filter = '') {
       else renderHistorySidebar(searchInput.value);
     });
 
-    item.addEventListener('click', () => { loadConversation(conv.id); if (window.innerWidth <= 768) closeSidebar(); });
+    item.addEventListener('click', () => {
+        loadConversation(conv.id);
+        if (window.innerWidth <= 768) closeSidebar();
+    });
     historyList.appendChild(item);
   });
   if (window.lucide) window.lucide.createIcons();
 }
 
-searchInput.addEventListener('input', () => renderHistorySidebar(searchInput.value));
+if (searchInput) searchInput.addEventListener('input', () => renderHistorySidebar(searchInput.value));
+if (refreshHistoryBtn) refreshHistoryBtn.addEventListener('click', () => refreshHistory(searchInput?.value || ''));
 
 // ─── Chat Lifecycle ───────────────────────────────────────────────────────────
 function startNewChat() {
   currentConvId = null;
   messagesContainer.querySelectorAll('.message-row').forEach(e => e.remove());
-  emptyState.classList.remove('hidden');
+  if (emptyState) emptyState.classList.remove('hidden');
   pendingAttachments = [];
   renderAttachStrip();
-  renderHistorySidebar(searchInput.value);
+  renderHistorySidebar(searchInput?.value || '');
   chatInput.value = '';
   chatInput.style.height = 'auto';
   updateSendBtn();
   chatInput.focus();
 }
 
-newChatBtn.addEventListener('click', startNewChat);
+if (newChatBtn) newChatBtn.addEventListener('click', startNewChat);
 
 function loadConversation(id) {
   const conv = History.get(id);
   if (!conv) return;
   currentConvId = id;
   messagesContainer.querySelectorAll('.message-row').forEach(e => e.remove());
-  emptyState.classList.add('hidden');
+  if (emptyState) emptyState.classList.add('hidden');
   conv.messages.forEach(msg => renderMessage(msg.role, msg.content, msg.attachments));
   if (conv.model) {
       selectedModelId = conv.model;
       modelPillLabel.textContent = getModelLabel(conv.model);
   }
   scrollToBottom(false);
-  renderHistorySidebar(searchInput.value);
+  renderHistorySidebar(searchInput?.value || '');
 }
 
 // ─── Render messages ──────────────────────────────────────────────────────────
 function renderMessage(role, content, attachments = []) {
-  emptyState.classList.add('hidden');
+  if (emptyState) emptyState.classList.add('hidden');
   const wrap = document.createElement('div');
   wrap.className = 'message-row w-full mb-8';
 
@@ -473,7 +498,7 @@ function renderMessage(role, content, attachments = []) {
 }
 
 function createAssistantMessage() {
-  emptyState.classList.add('hidden');
+  if (emptyState) emptyState.classList.add('hidden');
   const wrap = document.createElement('div');
   wrap.className = 'message-row w-full mb-8';
   wrap.innerHTML = `
@@ -507,7 +532,7 @@ async function sendMessage() {
   } else {
     let fullText = text;
     attachmentsCopy.filter(a => a.type === 'text').forEach(a => {
-      fullText += `\n\n---\n文件: ${a.name}\n\`\"\`\n${a.content}\n\`\"\`\n`;
+      fullText += `\n\n---\n文件: ${a.name}\n\`\`\`\n${a.content}\n\`\`\`\n`;
     });
     userContent = fullText;
   }
@@ -574,35 +599,37 @@ async function sendMessage() {
                 });
                 if (titleRes.ok) {
                     const data = await titleRes.json();
-                    if (data.title) { currentConv.title = data.title; renderHistorySidebar(searchInput.value); }
+                    if (data.title) { currentConv.title = data.title; renderHistorySidebar(searchInput?.value || ''); }
                 }
             } catch (e) {}
         })();
     }
-    setStreaming(false); renderHistorySidebar(searchInput.value); scrollToBottom(); updateSendBtn();
+    setStreaming(false); renderHistorySidebar(searchInput?.value || ''); scrollToBottom(); updateSendBtn();
   }
 }
 
 // ─── Input events ─────────────────────────────────────────────────────────────
-chatInput.addEventListener('input', autoResize);
-chatInput.addEventListener('paste', async (e) => {
-    const items = e.clipboardData.items;
-    for (const item of items) {
-        if (item.type.indexOf('image/') !== -1) {
-            e.preventDefault();
-            const file = item.getAsFile();
-            if (file) await uploadFile(file);
+if (chatInput) {
+    chatInput.addEventListener('input', autoResize);
+    chatInput.addEventListener('paste', async (e) => {
+        const items = e.clipboardData.items;
+        for (const item of items) {
+            if (item.type.indexOf('image/') !== -1) {
+                e.preventDefault();
+                const file = item.getAsFile();
+                if (file) await uploadFile(file);
+            }
         }
-    }
-});
-chatInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    if (chatInput.value.trim() !== '' || pendingAttachments.length > 0) { e.preventDefault(); sendMessage(); }
-  }
-});
-sendBtn.addEventListener('click', sendMessage);
-attachBtn.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', async () => {
+    });
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        if (chatInput.value.trim() !== '' || pendingAttachments.length > 0) { e.preventDefault(); sendMessage(); }
+      }
+    });
+}
+if (sendBtn) sendBtn.addEventListener('click', sendMessage);
+if (attachBtn) attachBtn.addEventListener('click', () => fileInput?.click());
+if (fileInput) fileInput.addEventListener('change', async () => {
   for (const file of Array.from(fileInput.files || [])) await uploadFile(file);
   fileInput.value = '';
 });
@@ -626,9 +653,8 @@ window.addEventListener('resize', () => {
 (async () => {
   await loadUser();
   await loadModels();
-  await History.loadFromServer();
-  renderHistorySidebar();
+  await refreshHistory();
   if (wasMobile) closeSidebar();
-  chatInput.focus();
+  if (chatInput) chatInput.focus();
   updateSendBtn();
 })();
