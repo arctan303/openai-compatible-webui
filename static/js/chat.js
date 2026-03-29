@@ -444,7 +444,7 @@ function startNewChat() {
   chatInput.focus();
 }
 
-if (newChatBtn) newChatBtn.addEventListener('click', startNewChat);
+if (newChatBtn) newChatBtn.addEventListener('click', () => { startNewChat(); if (window.innerWidth <= 768) closeSidebar(); });
 
 function loadConversation(id) {
   const conv = History.get(id);
