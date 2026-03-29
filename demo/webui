@@ -1,0 +1,380 @@
+import React, { useState, useEffect, useRef } from 'react';
+import {
+Menu, Edit, Search, MoreHorizontal, Share,
+ChevronDown, FileText, Check, File, Settings,
+LogOut, HelpCircle, User, Zap, Plus, ArrowUp,
+MessageSquare, LayoutGrid, Globe, GraduationCap,
+Terminal, Server, PanelLeftClose, PanelLeft
+} from 'lucide-react';
+
+const App = () => {
+const [isUserMenuOpen, setIsUserMenuOpen] = useState(true); // 默认打开以展示截图2的效果
+const [isSidebarOpen, setIsSidebarOpen] = useState(true); // 侧边栏折叠状态
+const menuRef = useRef(null);
+
+// 点击外部关闭菜单
+useEffect(() => {
+const handleClickOutside = (event) => {
+if (menuRef.current && !menuRef.current.contains(event.target)) {
+setIsUserMenuOpen(false);
+}
+};
+document.addEventListener('mousedown', handleClickOutside);
+return () => {
+document.removeEventListener('mousedown', handleClickOutside);
+};
+}, []);
+
+return (
+<div className="flex h-screen w-full bg-white text-gray-800 font-sans overflow-hidden">
+
+    {/* ================= 左侧侧边栏 ================= */}
+    <div className={`${isSidebarOpen ? 'w-[260px]' : 'w-0' } bg-[#f9f9f9] flex-shrink-0 flex flex-col border-r
+        border-gray-200 transition-all duration-300 relative z-20 overflow-hidden`}>
+
+        {/* 顶部按钮区 */}
+        <div className="p-3 min-w-[260px] flex flex-col gap-1">
+            {/* Logo & Toggle */}
+            <div className="flex items-center justify-between mb-2">
+                <div className="p-2 hover:bg-gray-200 rounded-lg cursor-pointer transition-colors">
+                    {/* OpenAI Logo SVG */}
+                    <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"
+                        className="w-[22px] h-[22px] text-black">
+                        <path
+                            d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A6.0651 6.0651 0 0 0 19.0192 19.818a5.9847 5.9847 0 0 0 3.9977-2.9001 6.0462 6.0462 0 0 0-.735-7.0968zM8.7504 6.2574a4.356 4.356 0 0 1 3.246-1.5437 4.3368 4.3368 0 0 1 3.2268 1.5247l-5.8344 3.3826a1.5997 1.5997 0 0 0-.8135 1.406v5.3544c-.0155.0466-.062.062-.093.0466L4.3402 14.04a4.3463 4.3463 0 0 1 1.2585-6.611l3.1517-1.1716zm9.8514 1.5437l-4.142 2.3837v4.7674l5.8344-3.3826a4.3463 4.3463 0 0 1-1.6924-4.8216c.0155-.0465.0465-.062.093-.062l4.142.0465a4.356 4.356 0 0 1-4.235 1.0686zM5.4013 15.115l4.142-2.3837V7.9638L3.7088 11.346a4.3463 4.3463 0 0 1 1.6925 4.8216c-.0155.0466-.0465.062-.093.062l-4.142-.0465a4.356 4.356 0 0 1 4.235-1.0686zM14.2357 7.025h-4.4714l2.2357-3.8724 2.2357 3.8724zm-6.1492 10.368l-2.2357-3.8724 4.142-2.3837-1.9063 6.2561zm8.3849-6.2561l4.142 2.3837-2.2357 3.8724-1.9063-6.2561zm-4.4714 6.0967h4.4714l-2.2357 3.8724-2.2357-3.8724z"
+                            fill="currentColor" />
+                    </svg>
+                </div>
+                <button onClick={()=> setIsSidebarOpen(false)}
+                    className="p-2 text-gray-500 hover:bg-gray-200 rounded-lg transition-colors"
+                    title="关闭侧边栏"
+                    >
+                    <PanelLeftClose className="w-5 h-5" />
+                </button>
+            </div>
+
+            {/* 新聊天与搜索 */}
+            <div className="space-y-0.5">
+                <div
+                    className="flex items-center px-2 py-2 rounded-lg cursor-pointer transition-colors hover:bg-gray-200 group">
+                    <div className="mr-3 text-gray-800">
+                        <Edit className="w-5 h-5" />
+                    </div>
+                    <span className="truncate text-gray-900 font-medium text-[15px]">新聊天</span>
+                </div>
+                <div
+                    className="flex items-center px-2 py-2 rounded-lg cursor-pointer transition-colors hover:bg-gray-200 group">
+                    <div className="mr-3 text-gray-800">
+                        <Search className="w-5 h-5" />
+                    </div>
+                    <span className="truncate text-gray-900 font-medium text-[15px]">搜索聊天</span>
+                </div>
+            </div>
+        </div>
+
+        {/* 导航列表区 */}
+        <div className="flex-1 overflow-y-auto px-3 py-2 custom-scrollbar text-sm min-w-[260px]">
+
+            {/* 你的聊天分类 */}
+            <div>
+                <div className="text-xs font-semibold text-gray-500 mb-2 px-2">你的聊天</div>
+                <div className="space-y-0.5">
+                    <NavItem text="实验报告写作指导" isActive={true} />
+                    <NavItem text="用户信息总结与偏好" />
+                    <NavItem text="API客户端推荐" />
+                    <NavItem text="Cursor API Key 问题" />
+                    <NavItem text="Lightsail 流量自动扩容" />
+                    <NavItem text="Cloud Mail简介" />
+                    <NavItem text="まっ逆さまの意味" />
+                    <NavItem text="MAC协议分类解释" />
+                    <NavItem text="液压传动判断选择题" />
+                    <NavItem text="数控加工程序解析" />
+                </div>
+            </div>
+        </div>
+
+        {/* 底部用户区 */}
+        <div className="p-2 border-t border-gray-200 relative" ref={menuRef}>
+            {/* 悬浮菜单 (截图2展示) */}
+            {isUserMenuOpen && (
+            <div
+                className="absolute bottom-full left-2 w-[240px] mb-2 bg-white rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.1)] border border-gray-100 py-2 text-sm z-50 animate-in fade-in slide-in-from-bottom-2">
+                <div
+                    className="px-3 py-2 hover:bg-gray-100 cursor-pointer flex items-center justify-between rounded-md mx-2">
+                    <div className="flex items-center">
+                        <div
+                            className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center mr-3 text-gray-600 font-medium">
+                            云</div>
+                        <div>
+                            <div className="font-medium text-gray-800">云隐</div>
+                            <div className="text-xs text-gray-500">个人帐户</div>
+                        </div>
+                    </div>
+                    <ChevronDown className="w-4 h-4 text-gray-400 -rotate-90" />
+                </div>
+
+                <div className="h-[1px] bg-gray-100 my-1 mx-2"></div>
+
+                <div
+                    className="px-3 py-2 mx-2 hover:bg-gray-100 cursor-pointer flex items-center rounded-md text-gray-700">
+                    <Zap className="w-4 h-4 mr-3 text-gray-500" /> 个性化
+                </div>
+                <div
+                    className="px-3 py-2 mx-2 hover:bg-gray-100 cursor-pointer flex items-center rounded-md text-gray-700">
+                    <User className="w-4 h-4 mr-3 text-gray-500" /> 个人资料
+                </div>
+                <div
+                    className="px-3 py-2 mx-2 hover:bg-gray-100 cursor-pointer flex items-center rounded-md text-gray-700">
+                    <Settings className="w-4 h-4 mr-3 text-gray-500" /> 设置
+                </div>
+
+                <div className="h-[1px] bg-gray-100 my-1 mx-2"></div>
+
+                <div
+                    className="px-3 py-2 mx-2 hover:bg-gray-100 cursor-pointer flex items-center rounded-md text-gray-700">
+                    <HelpCircle className="w-4 h-4 mr-3 text-gray-500" /> 帮助
+                </div>
+
+                <div className="h-[1px] bg-gray-100 my-1 mx-2"></div>
+
+                <div
+                    className="px-3 py-2 mx-2 hover:bg-gray-100 cursor-pointer flex items-center rounded-md text-gray-700">
+                    <LogOut className="w-4 h-4 mr-3 text-gray-500" /> 退出登录
+                </div>
+            </div>
+            )}
+
+            {/* 用户按钮 */}
+            <button onClick={()=> setIsUserMenuOpen(!isUserMenuOpen)}
+                className="w-full flex items-center p-2 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                <div
+                    className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center mr-3 text-gray-600 font-medium flex-shrink-0">
+                    云
+                </div>
+                <div className="text-left overflow-hidden">
+                    <div className="text-sm font-medium text-gray-800 truncate">云隐</div>
+                    <div className="text-xs text-gray-500 truncate">个人帐户</div>
+                </div>
+            </button>
+        </div>
+    </div>
+
+    {/* ================= 右侧主内容区 ================= */}
+    <div className="flex-1 flex flex-col relative bg-white min-w-0">
+
+        {/* 顶部 Header */}
+        <div className="flex items-center justify-between px-4 py-3 bg-white/90 backdrop-blur-sm sticky top-0 z-10">
+            <div className="flex items-center">
+                {!isSidebarOpen && (
+                <button onClick={()=> setIsSidebarOpen(true)}
+                    className="mr-3 p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                    title="打开侧边栏"
+                    >
+                    <PanelLeft className="w-5 h-5" />
+                </button>
+                )}
+                <div
+                    className="flex items-center cursor-pointer hover:bg-gray-100 px-3 py-1.5 rounded-lg transition-colors">
+                    <span className="font-semibold text-lg text-gray-800 mr-1">ChatGPT</span>
+                    <ChevronDown className="w-5 h-5 text-gray-500" />
+                </div>
+            </div>
+            <div className="flex items-center space-x-2">
+                <button
+                    className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors flex items-center text-sm font-medium">
+                    <Share className="w-4 h-4 mr-2" />
+                    分享
+                </button>
+                <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full transition-colors">
+                    <MoreHorizontal className="w-5 h-5" />
+                </button>
+            </div>
+        </div>
+
+        {/* 聊天内容区 */}
+        <div className="flex-1 overflow-y-auto w-full px-4 pb-32">
+            <div className="max-w-3xl mx-auto space-y-8 pt-6">
+
+                {/* 用户消息 */}
+                <div className="flex justify-end w-full">
+                    <div className="flex flex-col items-end max-w-[80%]">
+                        <div
+                            className="bg-gray-100 px-5 py-3 rounded-2xl rounded-tr-sm text-[15px] leading-relaxed text-gray-800 shadow-sm mb-2 relative">
+                            {/* 悬浮的附件卡片 (视觉上在上一轮对话) */}
+                            <div
+                                className="absolute -top-14 right-0 flex items-center bg-white border border-gray-200 rounded-xl p-2.5 shadow-sm min-w-[200px]">
+                                <div
+                                    className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
+                                    <File className="w-5 h-5 text-white" />
+                                </div>
+                                <div>
+                                    <div className="text-sm font-medium text-gray-800">液压实验内容.docx</div>
+                                    <div className="text-xs text-gray-500">文档</div>
+                                </div>
+                            </div>
+                            现在要写第一个实验报告 按照我的要求来为我输出
+                        </div>
+                    </div>
+                </div>
+
+                {/* AI 消息 1 */}
+                <div className="flex justify-start w-full group">
+                    {/* Content */}
+                    <div className="flex-1 min-w-0 text-[15.5px] leading-relaxed text-gray-800">
+                        <p className="mb-4">好，这个文件我已经看完了（📄 <span
+                                className="text-gray-500 underline decoration-gray-300 underline-offset-4 cursor-pointer">液压实验内容</span>）。<br />
+                            你现在是要写 <strong>实验一：认识挖掘机液压系统的组成</strong> 的实验报告，对吧？</p>
+
+                        <p className="mb-4">在开始之前我先确认一件事（很重要）👇<br />
+                            👉 你有没有 <strong>老师给的格式要求？</strong> 比如：</p>
+
+                        <ul className="list-disc pl-5 mb-4 space-y-1">
+                            <li>是否必须有"封面 / 表头"</li>
+                            <li>是否必须分"实验目的、原理、步骤、结果、分析"等</li>
+                        </ul>
+
+                        <p className="mb-8">如果有特殊要求，我可以直接给你一份 <strong>高分标准完整版（可直接交）</strong>。</p>
+
+                        <hr className="border-gray-200 mb-6" />
+
+                        <div className="flex items-center mb-6">
+                            <div className="bg-green-100 text-green-600 rounded p-1 mr-2">
+                                <Check className="w-4 h-4" />
+                            </div>
+                            <strong className="text-lg">下面先给你一个【标准满分版实验报告（实验一）】</strong>
+                        </div>
+
+                        <p className="text-gray-500 mb-8">（完全按你文件里的评分标准来写，保证能拿分）</p>
+
+                        <h2 className="text-2xl font-bold mb-6">实验报告一</h2>
+                        <h3 className="text-xl font-bold mb-8">实验名称：认识挖掘机液压系统的组成</h3>
+
+                        <hr className="border-gray-200 mb-8" />
+
+                        <h4 className="text-lg font-bold mb-4">一、实验目的</h4>
+                        <ol className="list-decimal pl-5 mb-8 space-y-2 font-medium">
+                            <li>认识挖掘机液压系统的基本组成。</li>
+                            <li>熟悉常见液压元件的结构及作用。</li>
+                            <li>掌握液压元件的分类方法。</li>
+                        </ol>
+
+                        {/* 截断部分模拟 */}
+                        <div
+                            className="h-20 bg-gradient-to-b from-white to-gray-50 flex items-end justify-center pb-2 relative">
+                            <button
+                                className="absolute -bottom-4 w-8 h-8 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-sm text-gray-500 hover:bg-gray-50">
+                                <ChevronDown className="w-5 h-5" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* AI 消息 2 (截图2 下半部分内容) */}
+                <div className="flex justify-start w-full group mt-12">
+                    <div className="flex-1 min-w-0 text-[15.5px] leading-relaxed text-gray-800">
+                        <ol className="list-decimal pl-5 mb-8 space-y-3" start="1">
+                            <li>挖掘机液压系统采用液压传动，具有结构紧凑、传动平稳、调速方便等优点。</li>
+                            <li>各类液压元件在系统中相互配合，缺一不可，例如：
+                                <ul className="list-disc pl-5 mt-2 space-y-1 text-gray-600">
+                                    <li>无液压泵则系统无法工作</li>
+                                    <li>无控制阀则无法实现动作控制</li>
+                                </ul>
+                            </li>
+                            <li>在实验过程中发现，部分元件外观相似，但功能不同，需要通过结构和连接方式加以区分。</li>
+                            <li>液压系统对密封性要求较高，一旦泄漏会严重影响性能。</li>
+                        </ol>
+
+                        <hr className="border-gray-200 mb-8" />
+
+                        <h4 className="text-lg font-bold mb-4 mt-8">八、实验结论</h4>
+                        <p className="mb-10 text-gray-700">
+                            本次实验成功完成了对挖掘机液压系统组成的认识，掌握了液压元件的分类方法，并对液压系统的工作原理有了初步理解，为后续液压系统的分析与设计奠定了基础。</p>
+
+                        <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                            <p className="font-bold mb-4 flex items-center text-lg">🔥 接下来你可以这样做：</p>
+                            <p className="mb-3">如果你想拿更高分，可以继续让我帮你👇</p>
+                            <ul className="space-y-2 mb-6">
+                                <li className="flex items-center"><span className="text-green-500 mr-2">✔️</span> 给你要做
+                                    <strong>Word版（可直接交）</strong></li>
+                                <li className="flex items-center"><span className="text-green-500 mr-2">✔️</span> 帮你
+                                    <strong>补真实验号（看起来更专业）</strong></li>
+                                <li className="flex items-center"><span className="text-green-500 mr-2">✔️</span> 帮你
+                                    <strong>加图（老师最喜欢）</strong></li>
+                                <li className="flex items-center"><span className="text-green-500 mr-2">✔️</span>
+                                    或者直接帮你写 <strong>实验二、三、四整套</strong></li>
+                            </ul>
+                            <p className="mb-3">直接说一句：</p>
+                            <p className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm inline-block">👉
+                                「<strong>生成Word</strong>」或「继续写实验二」就行，我帮你整套搞定。</p>
+                        </div>
+
+                        {/* 底部小标签 */}
+                        <div className="mt-4 flex gap-2">
+                            <button
+                                className="px-3 py-1 bg-white border border-gray-200 rounded-lg text-xs text-gray-500 hover:bg-gray-50 flex items-center">
+                                来源
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        {/* 底部输入区 */}
+        <div
+            className="absolute bottom-0 left-0 w-full bg-gradient-to-t from-white via-white to-transparent pt-6 pb-2 px-4 z-20">
+            <div className="max-w-3xl mx-auto">
+                {/* 输入框本体 */}
+                <div
+                    className="bg-[#f4f4f4] rounded-[24px] border border-gray-200/50 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-end px-3 py-3 focus-within:bg-white focus-within:border-gray-300 focus-within:shadow-md transition-all">
+                    {/* 左侧添加附件按钮 */}
+                    <button
+                        className="p-2 text-gray-500 hover:text-black hover:bg-gray-200 rounded-full transition-colors shrink-0 mb-0.5">
+                        <Plus className="w-5 h-5" />
+                    </button>
+
+                    {/* 输入区域 */}
+                    <div className="flex-1 max-h-48 overflow-y-auto px-2 min-h-[24px] flex items-center">
+                        <textarea
+                            className="w-full bg-transparent border-none focus:outline-none resize-none text-[15px] placeholder-gray-500 py-1.5"
+                            rows={1} placeholder="有问题，尽管问"></textarea>
+                    </div>
+
+                    {/* 右侧操作按钮 */}
+                    <div className="flex items-center gap-1 shrink-0 mb-0.5">
+                        {/* 发送按钮 */}
+                        <button
+                            className="w-8 h-8 bg-[#e5e5e5] hover:bg-[#d5d5d5] text-white rounded-full flex items-center justify-center transition-colors shadow-sm ml-1">
+                            <ArrowUp className="w-5 h-5 text-white" />
+                        </button>
+                    </div>
+                </div>
+
+                {/* 底部免责声明 */}
+                <div className="text-center text-xs text-gray-500 mt-2">
+                    ChatGPT 也可能会犯错。请核查重要信息。
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+);
+};
+
+// 侧边栏导航项组件
+const NavItem = ({ icon, text, isActive = false }) => {
+return (
+<div className={`flex items-center px-2 py-2 rounded-lg cursor-pointer transition-colors group ${isActive
+    ? 'bg-gray-200' : 'hover:bg-gray-200' }`}>
+    {icon && <div className="mr-2 text-gray-500 group-hover:text-gray-700">{icon}</div>}
+    <span className={`truncate ${isActive ? 'text-gray-800 font-medium' : 'text-gray-700' }`}>
+        {text}
+    </span>
+</div>
+);
+};
+
+export default App;
