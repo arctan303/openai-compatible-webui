@@ -6,7 +6,10 @@ from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-DB_URL = os.getenv("DATABASE_URL", DATABASE_URL)
+DB_URL = DATABASE_URL  # Already resolved from env in config.py
+
+# Whitelist of updatable user fields to prevent SQL injection
+_UPDATABLE_USER_FIELDS = {"password", "api_key", "api_base", "model", "is_admin", "allowed_models"}
 
 async def get_db_pool():
     if not hasattr(get_db_pool, "_pool"):
@@ -61,7 +64,7 @@ async def init_db():
                 "INSERT INTO users (username, password, api_key, api_base, model, is_admin) VALUES ($1, $2, $3, $4, $5, $6)",
                 ADMIN_USERNAME, hashed, ADMIN_API_KEY, ADMIN_API_BASE, "gpt-4o", 1
             )
-            print(f"✅ Default admin created: {ADMIN_USERNAME} / {ADMIN_PASSWORD}")
+            print(f"✅ Default admin '{ADMIN_USERNAME}' created. Please change the password via the admin panel.")
 
 async def get_user_by_username(username: str):
     pool = await get_db_pool()
@@ -104,6 +107,8 @@ async def update_user(user_id: int, data: dict):
     set_clauses = []
     values = []
     for i, (k, v) in enumerate(data.items(), 1):
+        if k not in _UPDATABLE_USER_FIELDS:
+            raise ValueError(f"Disallowed field: {k}")
         set_clauses.append(f"{k} = ${i}")
         values.append(v)
     
