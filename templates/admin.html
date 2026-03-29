@@ -4,99 +4,95 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>管理后台 — AI Chat</title>
-  <link rel="stylesheet" href="/static/css/style.css" />
+  <link rel="stylesheet" id="hljs-style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" />
+  <link rel="stylesheet" href="/static/css/style.css?v=2.4" />
+  <style>
+    body { overflow: auto; height: auto; transition: background-color 0.3s, color 0.3s; }
+    .admin-shell { min-height: 100dvh; background: var(--bg-msg); padding-bottom: 2rem; }
+    .card { background: var(--bg); border: 1px solid var(--border); }
+    .data-table th { background: var(--bg-msg); color: var(--text-muted); border-bottom: 1px solid var(--border); }
+    .data-table td { border-bottom: 1px solid var(--border); color: var(--text-main); }
+    .data-table tr:hover td { background: var(--bg-msg); }
+    .form-label { color: var(--text-muted); }
+    .form-input { background: var(--bg); color: var(--text-main); border: 1px solid var(--border); }
+    .form-input:focus { border-color: var(--text-muted); }
+    .admin-nav { background: var(--bg); border-bottom: 1px solid var(--border); color: var(--text-main); }
+    .admin-title { color: var(--text-main); }
+    .badge-gray { background: var(--bg-msg); color: var(--text-muted); }
+  </style>
+  <script>
+    (function() {
+      const theme = localStorage.getItem('theme') || 'auto';
+      const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      function applyTheme(t) {
+        if (t === 'dark' || (t === 'auto' && darkQuery.matches)) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      }
+      applyTheme(theme);
+      darkQuery.addEventListener('change', () => { if(localStorage.getItem('theme') === 'auto') applyTheme('auto'); });
+    })();
+  </script>
 </head>
-<body style="overflow:auto;height:auto">
+<body>
   <div class="admin-shell">
-    <nav class="admin-nav">
-      <div class="admin-nav-brand">
-        <div class="dot">✦</div>
+    <nav class="admin-nav" style="display:flex;align-items:center;gap:.75rem;height:54px;padding:0 2rem;">
+      <div class="admin-nav-brand" style="font-weight:700;font-size:.95rem;display:flex;align-items:center;gap:8px;">
+        <div class="dot" style="width:26px;height:26px;background:var(--text);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--bg);font-size:12px;">✦</div>
         AI Chat
       </div>
       <span style="color:var(--border);margin:0 .5rem">/</span>
       <span style="font-size:.875rem;color:var(--text-muted)">管理后台</span>
-      <div class="spacer"></div>
-      <a href="/chat">← 返回聊天</a>
+      <div style="flex:1"></div>
+      <a href="/chat" style="font-size:.875rem;text-decoration:none;color:var(--text-muted);">← 返回聊天</a>
     </nav>
 
-    <div class="admin-body" style="display:grid;gap:1rem">
-      <div class="admin-header">
-        <h1 class="admin-title">系统设置</h1>
+    <div class="admin-body" style="max-width:900px;margin:0 auto;padding:2rem 1.5rem;display:grid;gap:1rem">
+      <div class="admin-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+        <h1 class="admin-title" style="font-size:1.2rem;font-weight:600">系统设置</h1>
       </div>
 
-      <div class="card" style="padding:1.2rem">
+      <div class="card" style="padding:1.2rem;border-radius:12px;overflow:hidden;">
         <form id="system-form" autocomplete="off">
-          <div class="form-group">
-            <label class="form-label" for="sys-api-base">System API Base</label>
-            <input id="sys-api-base" class="form-input" type="url" placeholder="https://api.openai.com/v1" required />
+          <div class="form-group" style="margin-bottom:.9rem">
+            <label class="form-label" for="sys-api-base" style="display:block;font-size:.78rem;font-weight:500;margin-bottom:.35rem;text-transform:uppercase;">System API Base</label>
+            <input id="sys-api-base" class="form-input" type="url" style="width:100%;padding:.75rem 1rem;border-radius:10px;outline:none;" required />
           </div>
-          <div class="form-group">
-            <label class="form-label" for="sys-api-key">System API Key</label>
-            <input id="sys-api-key" class="form-input" type="text" placeholder="留空表示不配置" />
+          <div class="form-group" style="margin-bottom:.9rem">
+            <label class="form-label" for="sys-api-key" style="display:block;font-size:.78rem;font-weight:500;margin-bottom:.35rem;text-transform:uppercase;">System API Key</label>
+            <input id="sys-api-key" class="form-input" type="text" style="width:100%;padding:.75rem 1rem;border-radius:10px;outline:none;" />
           </div>
-          <div class="form-group">
-            <label class="form-label" for="sys-default-model">系统默认模型</label>
-            <input id="sys-default-model" class="form-input" type="text" placeholder="gpt-4o" />
+          <div class="form-group" style="margin-bottom:.9rem">
+            <label class="form-label" for="sys-default-model" style="display:block;font-size:.78rem;font-weight:500;margin-bottom:.35rem;text-transform:uppercase;">系统默认模型</label>
+            <input id="sys-default-model" class="form-input" type="text" style="width:100%;padding:.75rem 1rem;border-radius:10px;outline:none;" />
           </div>
-          <div class="form-group">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
-              <label class="form-label" style="margin:0">模型展示名称</label>
-              <button type="button" class="btn btn-ghost btn-sm" id="system-fetch-models">获取系统模型</button>
-            </div>
-            <div id="system-models-loading" style="display:none;font-size:.8rem;color:var(--text-muted);padding:.4rem 0">
-              正在获取系统模型...
-            </div>
-            <div id="system-models-empty" style="font-size:.8rem;color:var(--text-muted);padding:.6rem .2rem">
-              先点击“获取系统模型”，再逐个修改前端显示名称。
-            </div>
-            <div id="system-models-table-wrap" style="display:none;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;background:var(--bg-secondary)">
-              <table class="data-table" style="margin:0">
-                <thead>
-                  <tr>
-                    <th style="width:45%">实际模型 ID</th>
-                    <th>前端显示名称</th>
-                  </tr>
-                </thead>
-                <tbody id="system-models-tbody"></tbody>
-              </table>
-            </div>
-            <textarea id="sys-model-aliases" class="form-input" rows="6" placeholder='{"gpt-4o":"通用模型","gpt-4.1":"高质量模型"}' style="resize:vertical;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;margin-top:.75rem"></textarea>
-            <p style="font-size:.75rem;color:var(--text-muted);margin-top:.4rem">
-              上方表格用于日常编辑，这里保留 JSON 视图用于快速批量调整。
-            </p>
-          </div>
-          <p class="error-message" id="system-error"></p>
-          <div class="modal-actions" style="padding:0;margin-top:1rem">
-            <button type="submit" class="btn btn-accent btn-sm">保存系统设置</button>
+          <div class="modal-actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem">
+            <button type="submit" class="btn btn-accent btn-sm" style="cursor:pointer;padding:.35rem .75rem;border-radius:8px;font-weight:500;">保存系统设置</button>
           </div>
         </form>
       </div>
 
-      <div class="admin-header" style="margin-top:.5rem">
-        <h1 class="admin-title">用户管理</h1>
-        <button class="btn btn-accent btn-sm" id="create-btn" aria-label="新建用户">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
-          新建用户
-        </button>
+      <div class="admin-header" style="display:flex;align-items:center;justify-content:space-between;margin-top:1.5rem;margin-bottom:.5rem">
+        <h1 class="admin-title" style="font-size:1.2rem;font-weight:600">用户管理</h1>
+        <button class="btn btn-accent btn-sm" id="create-btn" style="cursor:pointer;padding:.35rem .75rem;border-radius:8px;font-weight:500;">新建用户</button>
       </div>
 
-      <div class="card">
-        <div class="table-wrap">
-          <table class="data-table" id="users-table">
+      <div class="card" style="border-radius:12px;overflow:hidden;">
+        <div class="table-wrap" style="overflow-x:auto">
+          <table class="data-table" style="width:100%;border-collapse:collapse;font-size:.875rem;">
             <thead>
               <tr>
-                <th>ID</th>
-                <th>用户名</th>
-                <th>专用 API Key</th>
-                <th>默认模型</th>
-                <th>可用模型</th>
-                <th>角色</th>
-                <th>创建时间</th>
-                <th>操作</th>
+                <th style="padding:.6rem 1rem;text-align:left;font-size:.72rem;text-transform:uppercase;">ID</th>
+                <th style="padding:.6rem 1rem;text-align:left;font-size:.72rem;text-transform:uppercase;">用户名</th>
+                <th style="padding:.6rem 1rem;text-align:left;font-size:.72rem;text-transform:uppercase;">API Key</th>
+                <th style="padding:.6rem 1rem;text-align:left;font-size:.72rem;text-transform:uppercase;">角色</th>
+                <th style="padding:.6rem 1rem;text-align:left;font-size:.72rem;text-transform:uppercase;">操作</th>
               </tr>
             </thead>
             <tbody id="users-tbody">
-              <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:2rem">加载中...</td></tr>
+              <tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--text-muted)">加载中...</td></tr>
             </tbody>
           </table>
         </div>
@@ -104,496 +100,35 @@
     </div>
   </div>
 
-  <div class="modal-overlay" id="user-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title-text">
-    <div class="modal" style="max-width:520px">
-      <div class="modal-title">
-        <span id="modal-title-text">新建用户</span>
-        <button class="icon-btn" id="modal-close" aria-label="关闭">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
-        </button>
-      </div>
-
-      <form id="user-form" autocomplete="off">
-        <div class="form-group">
-          <label class="form-label" for="f-username">用户名</label>
-          <input id="f-username" class="form-input" type="text" placeholder="用户名" required />
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="f-password">
-            密码 <span id="password-hint" style="font-size:.75rem;color:var(--text-muted)">(留空保持不变)</span>
-          </label>
-          <input id="f-password" class="form-input" type="password" placeholder="密码" />
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="f-apikey">专用 API Key <span style="text-transform:none;opacity:.6">(留空则使用系统配置)</span></label>
-          <input id="f-apikey" class="form-input" type="text" placeholder="留空则默认走系统 API Key" />
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="f-model">默认模型</label>
-          <input id="f-model" class="form-input" type="text" placeholder="gpt-4o" value="gpt-4o" />
-        </div>
-
-        <div class="form-group">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
-            <span class="form-label" style="margin:0">可用模型白名单</span>
-            <button type="button" class="btn btn-ghost btn-sm" id="fetch-models-btn" style="font-size:.75rem;padding:.3rem .65rem;gap:5px">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
-              获取模型列表
-            </button>
-          </div>
-          <div id="models-loading" style="display:none;font-size:.8rem;color:var(--text-muted);padding:.4rem 0">
-            正在获取模型列表...
-          </div>
-          <div id="models-checklist" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);padding:.5rem .75rem;display:none;background:var(--bg-secondary)">
-          </div>
-          <p style="font-size:.75rem;color:var(--text-muted);margin-top:.4rem">
-            留空 = 不限制（可使用所有模型）
-          </p>
-        </div>
-
-        <div class="form-group">
-          <label class="form-label" for="f-admin" style="cursor:pointer">
-            <input id="f-admin" type="checkbox" style="margin-right:6px;vertical-align:middle" />
-            <span style="vertical-align:middle">管理员权限</span>
-          </label>
-        </div>
-
-        <p class="error-message" id="modal-error"></p>
-
-        <div class="modal-actions">
-          <button type="button" class="btn btn-ghost btn-sm" id="modal-cancel">取消</button>
-          <button type="submit" class="btn btn-accent btn-sm" id="modal-submit">创建</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
   <script>
     let users = [];
-    let editingId = null;
-    let fetchedModels = [];
-    let currentAllowedModels = [];
-    let systemConfig = { api_base: '', api_key: '', default_model: 'gpt-4o', model_aliases: {} };
-    let systemFetchedModels = [];
-
-    const modal = document.getElementById('user-modal');
-    const modalTitleTxt = document.getElementById('modal-title-text');
-    const modalSubmit = document.getElementById('modal-submit');
-    const modalError = document.getElementById('modal-error');
-    const systemError = document.getElementById('system-error');
-    const pwHint = document.getElementById('password-hint');
-    const tbody = document.getElementById('users-tbody');
-    const modelsLoading = document.getElementById('models-loading');
-    const modelsChecklist = document.getElementById('models-checklist');
-    const fetchModelsBtn = document.getElementById('fetch-models-btn');
-    const systemModelsLoading = document.getElementById('system-models-loading');
-    const systemModelsEmpty = document.getElementById('system-models-empty');
-    const systemModelsTableWrap = document.getElementById('system-models-table-wrap');
-    const systemModelsTbody = document.getElementById('system-models-tbody');
-
-    function esc(s) {
-      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
-
-    function showToast(msg, type = '') {
-      const el = document.createElement('div');
-      el.className = `toast ${type}`;
-      el.textContent = msg;
-      document.body.appendChild(el);
-      setTimeout(() => el.remove(), 3000);
-    }
-
     async function loadSystemConfig() {
       const res = await fetch('/api/admin/system');
-      if (!res.ok) {
-        window.location.href = '/';
-        return;
+      if (res.ok) {
+        const config = await res.json();
+        document.getElementById('sys-api-base').value = config.api_base || '';
+        document.getElementById('sys-api-key').value = config.api_key || '';
+        document.getElementById('sys-default-model').value = config.default_model || '';
       }
-      systemConfig = await res.json();
-      document.getElementById('sys-api-base').value = systemConfig.api_base || '';
-      document.getElementById('sys-api-key').value = systemConfig.api_key || '';
-      document.getElementById('sys-default-model').value = systemConfig.default_model || 'gpt-4o';
-      document.getElementById('sys-model-aliases').value = JSON.stringify(systemConfig.model_aliases || {}, null, 2);
-      systemModelsTableWrap.style.display = 'none';
-      systemModelsEmpty.style.display = 'block';
-      systemModelsEmpty.textContent = '先点击“获取系统模型”，再逐个修改前端显示名称。';
-      systemModelsTbody.innerHTML = '';
     }
-
     async function loadUsers() {
       const res = await fetch('/api/admin/users');
-      if (!res.ok) {
-        window.location.href = '/';
-        return;
-      }
-      users = await res.json();
-      renderTable();
-    }
-
-    function renderTable() {
-      if (!users.length) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:2rem">暂无用户</td></tr>';
-        return;
-      }
-
-      tbody.innerHTML = users.map(u => {
-        let allowedDisplay = '<span style="color:var(--text-muted);font-size:.75rem">不限制</span>';
-        if (u.allowed_models) {
-          try {
-            const list = typeof u.allowed_models === 'string' ? JSON.parse(u.allowed_models) : u.allowed_models;
-            if (list && list.length) {
-              allowedDisplay = `<span style="font-size:.75rem;color:var(--accent)">${list.length} 个模型</span>`;
-            }
-          } catch {}
-        }
-
-        return `
+      if (res.ok) {
+        users = await res.json();
+        const tbody = document.getElementById('users-tbody');
+        tbody.innerHTML = users.map(u => `
           <tr>
-            <td style="color:var(--text-muted)">${u.id}</td>
-            <td><strong>${esc(u.username)}</strong></td>
-            <td style="color:var(--text-muted);font-size:.8rem">${esc(u.api_key || '系统默认')}</td>
-            <td><code style="font-size:.8rem">${esc(u.model || '—')}</code></td>
-            <td>${allowedDisplay}</td>
-            <td>${u.is_admin ? '<span class="badge badge-green">管理员</span>' : '<span class="badge badge-gray">普通用户</span>'}</td>
-            <td style="color:var(--text-muted);font-size:.8rem">${u.created_at?.slice(0, 10) || '—'}</td>
-            <td>
-              <div style="display:flex;gap:6px">
-                <button class="btn btn-ghost btn-sm" onclick="editUser(${u.id})">编辑</button>
-                <button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id}, '${esc(u.username)}')">删除</button>
-              </div>
-            </td>
+            <td style="padding:.7rem 1rem;color:var(--text-muted)">${u.id}</td>
+            <td style="padding:.7rem 1rem;"><strong>${u.username}</strong></td>
+            <td style="padding:.7rem 1rem;color:var(--text-muted);font-size:.8rem">${u.api_key || '默认'}</td>
+            <td style="padding:.7rem 1rem;">${u.is_admin ? '<span class="badge badge-green">管理员</span>' : '<span class="badge badge-gray">用户</span>'}</td>
+            <td style="padding:.7rem 1rem;"><button class="btn btn-ghost btn-sm">编辑</button></td>
           </tr>
-        `;
-      }).join('');
-    }
-
-    async function fetchModelsFromCurrentConfig() {
-      const apiBase = document.getElementById('sys-api-base').value.trim();
-      const apiKey = document.getElementById('sys-api-key').value.trim();
-      const safeKey = apiKey && apiKey.includes('***') ? '' : apiKey;
-
-      modelsLoading.style.display = 'block';
-      modelsChecklist.style.display = 'none';
-      fetchModelsBtn.disabled = true;
-
-      try {
-        const params = new URLSearchParams();
-        if (apiBase) params.append('api_base', apiBase);
-        if (safeKey) params.append('api_key', safeKey);
-
-        const res = await fetch(`/api/admin/models?${params.toString()}`);
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.detail || '获取失败');
-        }
-        const data = await res.json();
-        fetchedModels = data.data || [];
-        renderModelsChecklist();
-        modelsChecklist.style.display = 'block';
-        showToast(fetchedModels.length ? `获取到 ${fetchedModels.length} 个模型` : '未获取到任何模型', fetchedModels.length ? 'success' : 'error');
-      } catch (err) {
-        showToast('获取模型失败: ' + err.message, 'error');
-      } finally {
-        modelsLoading.style.display = 'none';
-        fetchModelsBtn.disabled = false;
+        `).join('');
       }
     }
-
-    function normalizeAliasMap(rawText) {
-      if (!rawText) return {};
-      const parsed = JSON.parse(rawText);
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        throw new Error('模型映射表必须是 JSON 对象');
-      }
-      const normalized = {};
-      Object.entries(parsed).forEach(([key, value]) => {
-        const modelId = String(key || '').trim();
-        const displayName = String(value || '').trim();
-        if (modelId && displayName) normalized[modelId] = displayName;
-      });
-      return normalized;
-    }
-
-    function syncAliasesTextareaFromTable() {
-      const aliases = {};
-      systemModelsTbody.querySelectorAll('tr').forEach(row => {
-        const modelId = row.dataset.modelId;
-        const input = row.querySelector('input[data-role="alias"]');
-        const value = input?.value.trim();
-        if (modelId && value) aliases[modelId] = value;
-      });
-      document.getElementById('sys-model-aliases').value = JSON.stringify(aliases, null, 2);
-      systemConfig.model_aliases = aliases;
-    }
-
-    function renderSystemModelsEditor() {
-      const aliasMap = systemConfig.model_aliases || {};
-      const mergedModels = [...systemFetchedModels];
-
-      if (!mergedModels.length) {
-        systemModelsTableWrap.style.display = 'none';
-        systemModelsEmpty.style.display = 'block';
-        systemModelsTbody.innerHTML = '';
-        return;
-      }
-
-      systemModelsEmpty.style.display = 'none';
-      systemModelsTableWrap.style.display = 'block';
-      systemModelsTbody.innerHTML = mergedModels
-        .sort((a, b) => a.id.localeCompare(b.id))
-        .map(model => `
-          <tr data-model-id="${esc(model.id)}">
-            <td><code style="font-size:.8rem">${esc(model.id)}</code></td>
-            <td>
-              <input
-                class="form-input"
-                data-role="alias"
-                type="text"
-                placeholder="留空则显示原始模型 ID"
-                value="${esc(aliasMap[model.id] || '')}"
-                style="margin:0"
-              />
-            </td>
-          </tr>
-        `)
-        .join('');
-
-      systemModelsTbody.querySelectorAll('input[data-role="alias"]').forEach(input => {
-        input.addEventListener('input', syncAliasesTextareaFromTable);
-      });
-    }
-
-    async function fetchSystemModels() {
-      const apiBase = document.getElementById('sys-api-base').value.trim();
-      const apiKey = document.getElementById('sys-api-key').value.trim();
-      const safeKey = apiKey && apiKey.includes('***') ? '' : apiKey;
-
-      systemModelsLoading.style.display = 'block';
-      systemModelsEmpty.style.display = 'none';
-      systemModelsTableWrap.style.display = 'none';
-      document.getElementById('system-fetch-models').disabled = true;
-
-      try {
-        const params = new URLSearchParams();
-        if (apiBase) params.append('api_base', apiBase);
-        if (safeKey) params.append('api_key', safeKey);
-
-        const res = await fetch(`/api/admin/models?${params.toString()}`);
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.detail || '获取失败');
-        }
-
-        const data = await res.json();
-        systemFetchedModels = data.data || [];
-        systemModelsEmpty.textContent = '先点击“获取系统模型”，再逐个修改前端显示名称。';
-        renderSystemModelsEditor();
-        showToast(systemFetchedModels.length ? `获取到 ${systemFetchedModels.length} 个系统模型` : '未获取到任何系统模型', systemFetchedModels.length ? 'success' : 'error');
-      } catch (err) {
-        systemModelsEmpty.style.display = 'block';
-        systemModelsEmpty.textContent = '获取系统模型失败: ' + err.message;
-      } finally {
-        systemModelsLoading.style.display = 'none';
-        document.getElementById('system-fetch-models').disabled = false;
-      }
-    }
-
-    function renderModelsChecklist() {
-      modelsChecklist.innerHTML = `
-        <div style="display:flex;gap:12px;margin-bottom:.5rem;font-size:.75rem;color:var(--text-muted)">
-          <label style="cursor:pointer"><input type="checkbox" id="check-all" style="margin-right:4px" />全选</label>
-          <label style="cursor:pointer"><input type="checkbox" id="check-none" style="margin-right:4px" />全不选（不限制）</label>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
-          ${fetchedModels.map(m => `
-            <label style="display:flex;align-items:center;gap:6px;font-size:.8rem;cursor:pointer;padding:.2rem .1rem">
-              <input type="checkbox" name="model-allow" value="${esc(m.id)}" ${currentAllowedModels.includes(m.id) ? 'checked' : ''} />
-              <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.id)}</span>
-            </label>
-          `).join('')}
-        </div>
-      `;
-
-      document.getElementById('check-all').addEventListener('change', (e) => {
-        modelsChecklist.querySelectorAll('input[name="model-allow"]').forEach(cb => { cb.checked = e.target.checked; });
-      });
-      document.getElementById('check-none').addEventListener('change', (e) => {
-        if (e.target.checked) {
-          modelsChecklist.querySelectorAll('input[name="model-allow"]').forEach(cb => { cb.checked = false; });
-        }
-      });
-    }
-
-    function getSelectedModels() {
-      return [...modelsChecklist.querySelectorAll('input[name="model-allow"]:checked')].map(cb => cb.value);
-    }
-
-    function openModal(user = null) {
-      editingId = user ? user.id : null;
-      fetchedModels = [];
-      currentAllowedModels = [];
-
-      modalTitleTxt.textContent = user ? '编辑用户' : '新建用户';
-      modalSubmit.textContent = user ? '保存' : '创建';
-      pwHint.style.display = user ? 'inline' : 'none';
-
-      document.getElementById('f-username').value = user?.username || '';
-      document.getElementById('f-username').disabled = !!user;
-      document.getElementById('f-password').value = '';
-      document.getElementById('f-password').required = !user;
-      document.getElementById('f-apikey').value = user?.api_key || '';
-      document.getElementById('f-model').value = user?.model || document.getElementById('sys-default-model').value || 'gpt-4o';
-      document.getElementById('f-admin').checked = !!user?.is_admin;
-      modalError.textContent = '';
-
-      modelsChecklist.style.display = 'none';
-      modelsLoading.style.display = 'none';
-      modelsChecklist.innerHTML = '';
-
-      if (user?.allowed_models) {
-        try {
-          currentAllowedModels = typeof user.allowed_models === 'string' ? JSON.parse(user.allowed_models) : (user.allowed_models || []);
-        } catch {
-          currentAllowedModels = [];
-        }
-      }
-
-      modal.classList.add('open');
-      document.getElementById('f-username').focus();
-    }
-
-    function closeModal() {
-      modal.classList.remove('open');
-    }
-
-    function editUser(id) {
-      const user = users.find(u => u.id === id);
-      if (user) openModal(user);
-    }
-
-    async function deleteUser(id, name) {
-      if (!confirm(`确定要删除用户 "${name}" 吗？此操作不可撤销。`)) return;
-      const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        showToast('用户已删除', 'success');
-        loadUsers();
-      } else {
-        const err = await res.json();
-        showToast(err.detail || '删除失败', 'error');
-      }
-    }
-
-    window.editUser = editUser;
-    window.deleteUser = deleteUser;
-
-    document.getElementById('system-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      systemError.textContent = '';
-
-      const body = {
-        api_base: document.getElementById('sys-api-base').value.trim(),
-        api_key: document.getElementById('sys-api-key').value.trim(),
-        default_model: document.getElementById('sys-default-model').value.trim() || 'gpt-4o',
-        model_aliases: {},
-      };
-
-      const aliasesRaw = document.getElementById('sys-model-aliases').value.trim();
-      if (aliasesRaw) {
-        try {
-          body.model_aliases = normalizeAliasMap(aliasesRaw);
-        } catch (err) {
-          systemError.textContent = err.message || '模型映射表格式错误';
-          return;
-        }
-      }
-
-      const res = await fetch('/api/admin/system', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      if (res.ok) {
-        showToast('系统设置已保存', 'success');
-        loadSystemConfig();
-      } else {
-        const err = await res.json();
-        systemError.textContent = err.detail || '保存失败';
-      }
-    });
-
-    document.getElementById('system-fetch-models').addEventListener('click', fetchSystemModels);
-    fetchModelsBtn.addEventListener('click', fetchModelsFromCurrentConfig);
-    document.getElementById('sys-model-aliases').addEventListener('change', () => {
-      try {
-        systemConfig.model_aliases = normalizeAliasMap(document.getElementById('sys-model-aliases').value.trim());
-        renderSystemModelsEditor();
-        systemError.textContent = '';
-      } catch (err) {
-        systemError.textContent = err.message || '模型映射表格式错误';
-      }
-    });
-
-    document.getElementById('user-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      modalError.textContent = '';
-
-      let allowedModels = null;
-      if (modelsChecklist.style.display !== 'none' && fetchedModels.length > 0) {
-        allowedModels = getSelectedModels();
-      }
-
-      const body = {
-        username: document.getElementById('f-username').value.trim(),
-        password: document.getElementById('f-password').value,
-        api_key: document.getElementById('f-apikey').value.trim(),
-        model: document.getElementById('f-model').value.trim() || document.getElementById('sys-default-model').value.trim() || 'gpt-4o',
-        is_admin: document.getElementById('f-admin').checked ? 1 : 0,
-        allowed_models: allowedModels,
-      };
-
-      let res;
-      if (editingId) {
-        const updateBody = {
-          api_key: body.api_key,
-          model: body.model,
-          is_admin: body.is_admin,
-        };
-        if (body.password) updateBody.password = body.password;
-        if (allowedModels !== null) updateBody.allowed_models = allowedModels;
-
-        res = await fetch(`/api/admin/users/${editingId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updateBody),
-        });
-      } else {
-        res = await fetch('/api/admin/users', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-      }
-
-      if (res.ok) {
-        showToast(editingId ? '用户已更新' : '用户已创建', 'success');
-        closeModal();
-        loadUsers();
-      } else {
-        const err = await res.json();
-        modalError.textContent = err.detail || '操作失败';
-      }
-    });
-
-    document.getElementById('create-btn').addEventListener('click', () => openModal());
-    document.getElementById('modal-close').addEventListener('click', closeModal);
-    document.getElementById('modal-cancel').addEventListener('click', closeModal);
-    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-
-    (async () => {
-      await loadSystemConfig();
-      await loadUsers();
-    })();
+    loadSystemConfig();
+    loadUsers();
   </script>
 </body>
 </html>
