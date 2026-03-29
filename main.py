@@ -127,6 +127,7 @@ async def logout(response: Response):
 
 @app.get("/api/auth/me")
 async def me(user=Depends(get_current_user)):
+    system_cfg = await database.get_system_config()
     allowed = None
     if user.get("allowed_models"):
         try:
@@ -137,7 +138,8 @@ async def me(user=Depends(get_current_user)):
         "id": user["id"],
         "username": user["username"],
         "model": user["model"],
-        "api_base": user["api_base"],
+        "api_base": system_cfg["api_base"] if system_cfg else "",
+        "system_default_model": system_cfg["default_model"] if system_cfg else "gpt-4o",
         "allowed_models": allowed,
         "is_admin": bool(user["is_admin"])
     }
@@ -161,13 +163,13 @@ class ChatRequest(BaseModel):
 
 @app.post("/api/chat/stream")
 async def chat_stream(body: ChatRequest, user=Depends(get_current_user)):
-    admin_cfg = await database.get_admin_config()
-    if not admin_cfg:
-        raise HTTPException(status_code=500, detail="系统未配置管理员")
+    system_cfg = await database.get_system_config()
+    if not system_cfg:
+        raise HTTPException(status_code=500, detail="系统未配置")
 
-    api_base = admin_cfg["api_base"].rstrip("/")
-    api_key = user["api_key"] if user["api_key"] else admin_cfg["api_key"]
-    model = body.model or user["model"]
+    api_base = system_cfg["api_base"].rstrip("/")
+    api_key = user["api_key"] if user["api_key"] else system_cfg["api_key"]
+    model = body.model or user["model"] or system_cfg["default_model"]
 
     # Validate model against allowed_models whitelist
     if user.get("allowed_models"):
@@ -223,13 +225,13 @@ class GenerateTitleRequest(BaseModel):
 
 @app.post("/api/history/{conv_id}/generate_title")
 async def generate_title(conv_id: str, body: GenerateTitleRequest, user=Depends(get_current_user)):
-    admin_cfg = await database.get_admin_config()
-    if not admin_cfg:
+    system_cfg = await database.get_system_config()
+    if not system_cfg:
         raise HTTPException(status_code=500, detail="系统未配置")
 
-    api_base = admin_cfg["api_base"].rstrip("/")
-    api_key = user["api_key"] if user["api_key"] else admin_cfg["api_key"]
-    model = body.model or user["model"]
+    api_base = system_cfg["api_base"].rstrip("/")
+    api_key = user["api_key"] if user["api_key"] else system_cfg["api_key"]
+    model = body.model or user["model"] or system_cfg["default_model"]
 
     # Simple prompt for title generation
     messages = [
@@ -277,12 +279,12 @@ async def generate_title(conv_id: str, body: GenerateTitleRequest, user=Depends(
 @app.get("/api/models")
 async def get_models(user=Depends(get_current_user)):
     """Fetch model list from user's API base, filtered by allowed_models whitelist."""
-    admin_cfg = await database.get_admin_config()
-    if not admin_cfg:
-        raise HTTPException(status_code=500, detail="系统未配置管理员")
+    system_cfg = await database.get_system_config()
+    if not system_cfg:
+        raise HTTPException(status_code=500, detail="系统未配置")
         
-    api_base = admin_cfg["api_base"].rstrip("/")
-    api_key = user["api_key"] if user["api_key"] else admin_cfg["api_key"]
+    api_base = system_cfg["api_base"].rstrip("/")
+    api_key = user["api_key"] if user["api_key"] else system_cfg["api_key"]
     
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -313,12 +315,12 @@ async def get_models(user=Depends(get_current_user)):
 @app.get("/api/admin/models")
 async def get_admin_models(api_base: str = "", api_key: str = "", admin=Depends(require_admin)):
     """Admin: fetch ALL models from any API base (for building user model whitelist)."""
-    admin_cfg = await database.get_admin_config()
-    if not admin_cfg:
-        raise HTTPException(status_code=500, detail="系统未配置管理员")
+    system_cfg = await database.get_system_config()
+    if not system_cfg:
+        raise HTTPException(status_code=500, detail="系统未配置")
         
-    actual_base = (api_base or admin_cfg["api_base"]).rstrip("/")
-    actual_key = api_key if api_key and '*' not in api_key else admin_cfg["api_key"]
+    actual_base = (api_base or system_cfg["api_base"]).rstrip("/")
+    actual_key = api_key if api_key and '*' not in api_key else system_cfg["api_key"]
     
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -377,6 +379,47 @@ async def upload_file(file: UploadFile = File(...), user=Depends(get_current_use
 # Admin API
 # ─────────────────────────────────────────────
 
+class SystemConfigRequest(BaseModel):
+    api_base: str
+    api_key: str = ""
+    default_model: str = "gpt-4o"
+
+
+@app.get("/api/admin/system")
+async def get_admin_system(admin=Depends(require_admin)):
+    system_cfg = await database.get_system_config()
+    if not system_cfg:
+        raise HTTPException(status_code=500, detail="系统未配置")
+
+    masked_key = system_cfg["api_key"] or ""
+    if masked_key:
+        masked_key = masked_key[:3] + "*" * 6 + masked_key[-4:] if len(masked_key) > 8 else "********"
+
+    return {
+        "api_base": system_cfg["api_base"],
+        "api_key": masked_key,
+        "default_model": system_cfg["default_model"],
+    }
+
+
+@app.put("/api/admin/system")
+async def update_admin_system(body: SystemConfigRequest, admin=Depends(require_admin)):
+    data = {
+        "api_base": body.api_base.strip(),
+        "default_model": body.default_model.strip() or "gpt-4o",
+    }
+    if body.api_key and "*" in body.api_key:
+        pass
+    else:
+        data["api_key"] = body.api_key.strip()
+
+    if not data["api_base"]:
+        raise HTTPException(status_code=400, detail="API Base 不能为空")
+
+    await database.update_system_config(data)
+    return {"ok": True}
+
+
 @app.get("/api/admin/users")
 async def list_users(admin=Depends(require_admin)):
     users = await database.get_all_users()
@@ -394,7 +437,6 @@ class CreateUserRequest(BaseModel):
     username: str
     password: str
     api_key: str = ""
-    api_base: str = ""
     model: str = "gpt-4o"
     is_admin: int = 0
     allowed_models: Optional[List[str]] = None
@@ -406,7 +448,7 @@ async def create_user_route(body: CreateUserRequest, admin=Depends(require_admin
         allowed_json = json.dumps(body.allowed_models) if body.allowed_models is not None else None
         await database.create_user(
             body.username, body.password, body.api_key,
-            body.api_base, body.model, body.is_admin, allowed_json
+            body.model, body.is_admin, allowed_json
         )
         return {"ok": True}
     except Exception as e:
@@ -416,7 +458,6 @@ async def create_user_route(body: CreateUserRequest, admin=Depends(require_admin
 class UpdateUserRequest(BaseModel):
     password: Optional[str] = None
     api_key: Optional[str] = None
-    api_base: Optional[str] = None
     model: Optional[str] = None
     is_admin: Optional[int] = None
     allowed_models: Optional[List[str]] = None  # None = unchanged, [] = all allowed
@@ -439,8 +480,6 @@ async def update_user_route(user_id: int, body: UpdateUserRequest, admin=Depends
                 pass  # Ignore masked string
             else:
                 data["api_key"] = v if v is not None else ""
-        elif k == "api_base":
-            pass  # Ignore api_base completely as it is centrally managed
         elif v is not None:
             data[k] = v
     if data:

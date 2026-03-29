@@ -1,40 +1,51 @@
-# AI Chat ✦
+# AI Chat
 
-一个简约、强大且具有云端漫游功能的 AI 聊天系统。基于 FastAPI + PostgreSQL + Vanilla JS 构建。
+一个基于 FastAPI + PostgreSQL + Vanilla JS 的聊天系统，支持流式对话、历史同步、模型白名单和管理后台。
 
-## 核心特性
-- **云端同步**：聊天记录实时持久化到 PostgreSQL，支持多设备无缝漫游。
-- **智能标题**：AI 自动根据对话内容生成精准的小标题。
-- **多模态支持**：支持图片上传、文件解析及代码高亮。
-- **全量 Docker 化**：支持一键部署，包括数据库自托管。
+## 配置规则
 
-## 🚀 快速部署 (Docker)
+项目现在采用两层配置边界：
 
-确保你的机器上已安装 `Docker` 和 `Docker Compose`。
+- `.env` 只负责启动期配置和首个管理员初始化
+- 数据库负责系统运行配置和用户业务配置
 
-1. **获取代码**
-   ```bash
-   git clone git@github.com:arctan303/chat.arctan.top.git
-   cd chat.arctan.top
-   ```
+### `.env` 中保留的内容
 
-2. **配置环境变量**
-   创建 `.env` 文件：
-   ```bash
-   DATABASE_URL=postgresql://ai_chat:ai_chat@db:5432/ai_chat
-   SECRET_KEY=你的随机字符串
-   ```
+- `DATABASE_URL`
+- `SECRET_KEY`
+- `BOOTSTRAP_ADMIN_USERNAME`
+- `BOOTSTRAP_ADMIN_PASSWORD`
+- `BOOTSTRAP_SYSTEM_API_KEY`
+- `BOOTSTRAP_SYSTEM_API_BASE`
+- `BOOTSTRAP_SYSTEM_MODEL`
 
-3. **一键启动**
-   ```bash
-   docker compose up -d
-   ```
-   启动后，访问 `http://localhost:8000` 即可开始聊天。默认管理员：`admin` / `admin123`。
+其中：
 
-## 🛠 本地开发
+- `DATABASE_URL` 和 `SECRET_KEY` 每次启动都会读取
+- `BOOTSTRAP_*` 只在数据库首次初始化时用于写入默认数据
 
-1. 安装依赖：`pip install -r requirements.txt`
-2. 运行后端：`python main.py`
+### 数据库中的运行配置
 
-## 许可证
-MIT License
+- `system_config` 表：
+  - 系统 `api_base`
+  - 系统 `api_key`
+  - 系统默认模型
+- `users` 表：
+  - 用户账号密码
+  - 用户专用 `api_key`
+  - 用户默认模型
+  - 用户模型白名单
+
+系统启动后，聊天和模型列表接口统一读取数据库里的 `system_config`，不再依赖 `.env` 中的系统 API 配置。
+
+## 快速启动
+
+1. 复制 `.env.example` 为 `.env`
+2. 按需修改数据库连接、`SECRET_KEY` 和 bootstrap 管理员账号
+3. 启动：
+
+```bash
+docker compose up -d
+```
+
+首次启动后，登录后台即可在数据库中维护系统 API 配置和默认模型。
