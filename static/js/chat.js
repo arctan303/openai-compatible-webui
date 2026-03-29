@@ -1,5 +1,6 @@
 /**
  * chat.js — React Demo Integrated Interface Logic
+ * Version: 2.2-Theme
  */
 
 // ─── State ────────────────────────────────────────────────────────────────────
@@ -94,7 +95,6 @@ window.copyCode = function(btn) {
 function parseMarkdown(text) {
   if (typeof marked === 'undefined') return esc(text).replace(/\n/g, '<br>');
   const html = marked.parse(text);
-  // Re-run lucide icons for any icons spawned
   setTimeout(() => window.lucide && window.lucide.createIcons(), 0);
   return html;
 }
@@ -115,7 +115,7 @@ function scrollToBottom(smooth = true) {
 
 function autoResize() {
   chatInput.style.height = 'auto';
-  chatInput.style.height = Math.min(chatInput.scrollHeight, 192) + 'px'; // ~48 max-h
+  chatInput.style.height = Math.min(chatInput.scrollHeight, 192) + 'px'; 
   updateSendBtn();
 }
 
@@ -126,32 +126,34 @@ function updateSendBtn() {
   
   if (isStreaming) {
       sendBtn.disabled = true;
-      sendBtn.classList.add('bg-[#e5e5e5]', 'hover:bg-[#d5d5d5]');
-      sendBtn.classList.remove('bg-black', 'text-white');
+      sendBtn.classList.remove('bg-gray-800', 'text-white', 'dark:bg-white', 'dark:text-black');
+      sendBtn.classList.add('bg-transparent');
   } else if ((hasText || hasAttach) && !isUploading) {
       sendBtn.disabled = false;
-      sendBtn.classList.remove('bg-[#e5e5e5]', 'hover:bg-[#d5d5d5]', 'cursor-not-allowed');
-      sendBtn.classList.add('bg-black', 'text-white');
+      sendBtn.classList.remove('opacity-50');
+      // Dynamic styles for light/dark
+      if (document.documentElement.classList.contains('dark')) {
+          sendBtn.classList.add('bg-white', 'text-black');
+          sendBtn.classList.remove('bg-black', 'text-white');
+      } else {
+          sendBtn.classList.add('bg-black', 'text-white');
+          sendBtn.classList.remove('bg-white', 'text-black');
+      }
       sendIcon.classList.remove('hidden');
       stopIcon.classList.add('hidden');
   } else {
       sendBtn.disabled = true;
-      sendBtn.classList.add('bg-[#e5e5e5]', 'hover:bg-[#d5d5d5]');
-      sendBtn.classList.remove('bg-black', 'text-white');
+      sendBtn.classList.add('opacity-50');
+      sendBtn.classList.remove('bg-black', 'bg-white', 'text-white', 'text-black');
   }
 }
 
-// ... skip unchanged functions until uploadFile
-
+// ─── Upload ───────────────────────────────────────────────────────────────────
 async function uploadFile(file) {
   const isImage = file.type.startsWith('image/');
   const attachId = Math.random().toString(36).substring(7);
-  
-  // Create placeholder immediately so user sees uploading state
   const placeholder = { id: attachId, type: isImage ? 'image' : 'text', name: file.name, isUploading: true };
-  if (isImage) {
-      placeholder.data = URL.createObjectURL(file); // Show local preview instantly
-  }
+  if (isImage) placeholder.data = URL.createObjectURL(file);
   pendingAttachments.push(placeholder);
   renderAttachStrip();
   updateSendBtn();
@@ -212,10 +214,7 @@ function compressImage(file) {
                 canvas.height = height;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
-                // Artificial delay to show uploading UI (e.g. 500ms) to ensure UX feedback is visible
-                setTimeout(() => {
-                    resolve(canvas.toDataURL('image/jpeg', 0.6));
-                }, 500);
+                setTimeout(() => resolve(canvas.toDataURL('image/jpeg', 0.6)), 500);
             };
             img.src = e.target.result;
         };
@@ -227,20 +226,19 @@ function renderAttachStrip() {
   attachStrip.innerHTML = '';
   pendingAttachments.forEach((a, i) => {
     const thumb = document.createElement('div');
-    thumb.className = 'relative inline-flex items-center justify-center shrink-0 border border-gray-200 rounded-lg overflow-hidden bg-white mr-2 mb-2 p-2 shadow-sm gap-2';
+    thumb.className = 'relative inline-flex items-center justify-center shrink-0 border border-[var(--border-color)] rounded-lg overflow-hidden bg-[var(--menu-bg)] mr-2 mb-2 p-2 shadow-sm gap-2';
     
     if (a.type === 'image') {
       thumb.innerHTML = `<img src="${a.data}" class="h-10 w-10 object-cover rounded opacity-${a.isUploading ? '50' : '100'} transition-opacity" alt="" />`;
     } else {
-      thumb.innerHTML = `<div class="bg-blue-100 p-2 rounded opacity-${a.isUploading ? '50' : '100'}"><i data-lucide="file-text" class="w-6 h-6 text-blue-500"></i></div>
-                         <div class="flex flex-col opacity-${a.isUploading ? '50' : '100'}"><span class="text-xs font-medium max-w-[80px] truncate">${esc(a.name)}</span></div>`;
+      thumb.innerHTML = `<div class="bg-blue-100 dark:bg-blue-900 p-2 rounded opacity-${a.isUploading ? '50' : '100'}"><i data-lucide="file-text" class="w-6 h-6 text-blue-500"></i></div>
+                         <div class="flex flex-col opacity-${a.isUploading ? '50' : '100'}"><span class="text-xs font-medium max-w-[80px] truncate text-[var(--text-main)]">${esc(a.name)}</span></div>`;
     }
 
     if (a.isUploading) {
-        // Loading spinner overlay
         const spinner = document.createElement('div');
-        spinner.className = 'absolute inset-0 flex items-center justify-center bg-white/40';
-        spinner.innerHTML = `<i data-lucide="loader-2" class="w-5 h-5 text-gray-800 animate-spin"></i>`;
+        spinner.className = 'absolute inset-0 flex items-center justify-center bg-black/10';
+        spinner.innerHTML = `<i data-lucide="loader-2" class="w-5 h-5 text-[var(--text-main)] animate-spin"></i>`;
         thumb.appendChild(spinner);
     } else {
         const rm = document.createElement('button');
@@ -279,7 +277,7 @@ async function loadUser() {
     
     if (currentUser.is_admin) {
         adminLink.classList.remove('hidden');
-        adminDivider.classList.remove('hidden');
+        if(adminDivider) adminDivider.classList.remove('hidden');
     }
   } catch {
     window.location.href = '/';
@@ -305,7 +303,7 @@ async function loadModels() {
             modelDisplayMap[m.id] = m.display_name;
         }
         const item = document.createElement('div');
-        item.className = 'px-4 py-3 mx-2 my-1 hover:bg-gray-100 rounded-lg cursor-pointer flex items-center text-sm font-medium text-gray-800 transition-colors gap-3';
+        item.className = 'px-4 py-3 mx-2 my-1 hover:bg-[var(--hover-bg)] rounded-lg cursor-pointer flex items-center text-sm font-medium text-[var(--text-main)] transition-colors gap-3';
         item.innerHTML = `<i data-lucide="sparkles" class="w-4 h-4 text-sky-500"></i><span class="truncate">${esc(m.display_name || getModelLabel(m.id))}</span>`;
         item.onclick = (e) => {
             e.stopPropagation();
@@ -314,13 +312,11 @@ async function loadModels() {
             modelDropdown.classList.add('hidden');
         };
         modelDropdownList.appendChild(item);
-        
         if (!selectedModelId && m.id === currentUser?.model) selectedModelId = m.id;
     });
     
     if (!selectedModelId && models.length > 0) selectedModelId = models[0].id;
     modelPillLabel.textContent = getModelLabel(selectedModelId);
-    
     if (window.lucide) window.lucide.createIcons();
   } catch {
     selectedModelId = currentUser?.model || 'gpt-4o';
@@ -386,10 +382,10 @@ function renderHistorySidebar(filter = '') {
   filtered.forEach(conv => {
     const item = document.createElement('div');
     const isActive = conv.id === currentConvId;
-    item.className = `history-item flex items-center px-2 py-2 rounded-lg cursor-pointer transition-colors group ${isActive ? 'bg-gray-200' : 'hover:bg-gray-200'}`;
+    item.className = `history-item flex items-center px-2 py-2 rounded-lg cursor-pointer transition-colors group ${isActive ? 'bg-[var(--hover-bg)]' : 'hover:bg-[var(--hover-bg)]'}`;
     item.innerHTML = `
-      <span class="truncate ${isActive ? 'text-gray-900 font-medium' : 'text-gray-700'} flex-1">${esc(conv.title || '新对话')}</span>
-      <button class="history-item-del opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-red-500 transition-opacity">
+      <span class="truncate ${isActive ? 'text-[var(--text-main)] font-medium' : 'text-[var(--text-muted)]'} flex-1">${esc(conv.title || '新对话')}</span>
+      <button class="history-item-del opacity-0 group-hover:opacity-100 p-1 text-[var(--text-muted)] hover:text-red-500 transition-opacity">
         <i data-lucide="trash-2" class="w-4 h-4"></i>
       </button>
     `;
@@ -401,7 +397,7 @@ function renderHistorySidebar(filter = '') {
       else renderHistorySidebar(searchInput.value);
     });
 
-    item.addEventListener('click', () => loadConversation(conv.id));
+    item.addEventListener('click', () => { loadConversation(conv.id); if (window.innerWidth <= 768) closeSidebar(); });
     historyList.appendChild(item);
   });
   if (window.lucide) window.lucide.createIcons();
@@ -432,13 +428,10 @@ function loadConversation(id) {
   messagesContainer.querySelectorAll('.message-row').forEach(e => e.remove());
   emptyState.classList.add('hidden');
   conv.messages.forEach(msg => renderMessage(msg.role, msg.content, msg.attachments));
-  
-  // Sync Model Pill
   if (conv.model) {
       selectedModelId = conv.model;
       modelPillLabel.textContent = getModelLabel(conv.model);
   }
-  
   scrollToBottom(false);
   renderHistorySidebar(searchInput.value);
 }
@@ -446,7 +439,6 @@ function loadConversation(id) {
 // ─── Render messages ──────────────────────────────────────────────────────────
 function renderMessage(role, content, attachments = []) {
   emptyState.classList.add('hidden');
-
   const wrap = document.createElement('div');
   wrap.className = 'message-row w-full mb-8';
 
@@ -454,34 +446,27 @@ function renderMessage(role, content, attachments = []) {
     let attachHtml = '';
     if (attachments && attachments.length) {
       const items = attachments.map(a => {
-        if (a.type === 'image') return `<img src="${a.data}" class="w-16 h-16 object-cover rounded shadow-sm border border-gray-200 bg-white" alt="img" />`;
-        return `<div class="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm"><i data-lucide="file" class="w-4 h-4 text-blue-500"></i><span class="text-xs font-medium">${esc(a.name)}</span></div>`;
+        if (a.type === 'image') return `<img src="${a.data}" class="w-16 h-16 object-cover rounded shadow-sm border border-[var(--border-color)] bg-[var(--bg-main)]" alt="img" />`;
+        return `<div class="flex items-center gap-2 bg-[var(--bg-main)] border border-[var(--border-color)] rounded-xl px-3 py-2 shadow-sm text-[var(--text-main)]"><i data-lucide="file" class="w-4 h-4 text-blue-500"></i><span class="text-xs font-medium">${esc(a.name)}</span></div>`;
       }).join('');
       attachHtml = `<div class="flex flex-wrap gap-2 mb-2 justify-end w-full">${items}</div>`;
     }
-
     const text = typeof content === 'string' ? content : (Array.isArray(content) ? content.find(c => c.type === 'text')?.text || '' : '');
-
     wrap.innerHTML = `
       <div class="flex justify-end w-full">
           <div class="flex flex-col items-end max-w-[80%]">
               ${attachHtml}
-              <div class="bg-[#f4f4f4] px-5 py-3 rounded-2xl rounded-tr-sm text-[15px] leading-relaxed text-gray-800 break-words whitespace-pre-wrap">${esc(text)}</div>
+              <div class="bg-[var(--msg-user-bg)] px-5 py-3 rounded-2xl rounded-tr-sm text-[15px] leading-relaxed text-[var(--text-main)] break-words whitespace-pre-wrap">${esc(text)}</div>
           </div>
-      </div>
-    `;
+      </div>`;
   } else {
     const text = typeof content === 'string' ? content : '';
     wrap.innerHTML = `
       <div class="flex justify-start w-full group">
-          <div class="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center shrink-0 mr-4 font-bold tracking-tighter text-sm pb-0.5">✦</div>
-          <div class="flex-1 min-w-0 text-[15.5px] leading-relaxed text-gray-800 markdown-body">
-              ${parseMarkdown(text)}
-          </div>
-      </div>
-    `;
+          <div class="w-8 h-8 rounded-full border border-[var(--border-color)] flex items-center justify-center shrink-0 mr-4 font-bold tracking-tighter text-sm pb-0.5 text-[var(--text-main)] bg-[var(--bg-main)]">✦</div>
+          <div class="flex-1 min-w-0 text-[15.5px] leading-relaxed text-[var(--text-main)] markdown-body">${parseMarkdown(text)}</div>
+      </div>`;
   }
-
   messagesContainer.appendChild(wrap);
   if (window.lucide) window.lucide.createIcons();
   return wrap;
@@ -493,35 +478,27 @@ function createAssistantMessage() {
   wrap.className = 'message-row w-full mb-8';
   wrap.innerHTML = `
     <div class="flex justify-start w-full group">
-        <div class="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center shrink-0 mr-4 font-bold tracking-tighter text-sm pb-0.5">✦</div>
-        <div class="flex-1 min-w-0 text-[15.5px] leading-relaxed text-gray-800 markdown-body">
+        <div class="w-8 h-8 rounded-full border border-[var(--border-color)] flex items-center justify-center shrink-0 mr-4 font-bold tracking-tighter text-sm pb-0.5 text-[var(--text-main)] bg-[var(--bg-main)]">✦</div>
+        <div class="flex-1 min-w-0 text-[15.5px] leading-relaxed text-[var(--text-main)] markdown-body">
             <span class="cursor"></span>
         </div>
-    </div>
-  `;
+    </div>`;
   messagesContainer.appendChild(wrap);
   return wrap.querySelector('.markdown-body');
 }
 
 // ─── Send logic ─────────────────────────────────────────────────────────────
 async function sendMessage() {
-  if (isStreaming) {
-    abortController?.abort();
-    return;
-  }
-
+  if (isStreaming) { abortController?.abort(); return; }
   const text = chatInput.value.trim();
   if (!text && pendingAttachments.length === 0) return;
-
   if (!currentConvId) {
     const modelToUse = selectedModelId || currentUser?.model || 'gpt-4o';
     const conv = await History.create('新对话', modelToUse);
     currentConvId = conv.id;
   }
-
   const attachmentsCopy = [...pendingAttachments];
   let userContent;
-
   if (attachmentsCopy.some(a => a.type === 'image') && text) {
     userContent = [{ type: 'text', text }];
     attachmentsCopy.filter(a => a.type === 'image').forEach(a => {
@@ -530,33 +507,21 @@ async function sendMessage() {
   } else {
     let fullText = text;
     attachmentsCopy.filter(a => a.type === 'text').forEach(a => {
-      fullText += `\n\n---\n文件: ${a.name}\n\`\`\`\n${a.content}\n\`\`\``;
+      fullText += `\n\n---\n文件: ${a.name}\n\`\"\`\n${a.content}\n\`\"\`\n`;
     });
     userContent = fullText;
   }
-
   await History.addMessage(currentConvId, { role: 'user', content: userContent, attachments: attachmentsCopy }, selectedModelId);
   renderMessage('user', userContent, attachmentsCopy);
-
-  chatInput.value = '';
-  chatInput.style.height = 'auto';
-  pendingAttachments = [];
-  renderAttachStrip();
-  updateSendBtn();
-
+  chatInput.value = ''; chatInput.style.height = 'auto';
+  pendingAttachments = []; renderAttachStrip(); updateSendBtn();
   const conv = History.get(currentConvId);
   const apiMessages = (conv?.messages || []).map(m => ({ role: m.role, content: m.content }));
   const selectedModel = selectedModelId || currentUser?.model || 'gpt-4o';
-
-  setStreaming(true);
-  scrollToBottom();
-
-  const contentEl = createAssistantMessage();
-  scrollToBottom();
-
+  setStreaming(true); scrollToBottom();
+  const contentEl = createAssistantMessage(); scrollToBottom();
   abortController = new AbortController();
   let fullText = '';
-
   try {
     const res = await fetch('/api/chat/stream', {
       method: 'POST',
@@ -564,27 +529,21 @@ async function sendMessage() {
       body: JSON.stringify({ messages: apiMessages, model: selectedModel }),
       signal: abortController.signal,
     });
-
     if (!res.ok) throw new Error((await res.json().catch(()=>({}))).detail || '请求失败');
-
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
-
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
       buffer = lines.pop();
-
       for (const line of lines) {
         if (!line.startsWith('data:')) continue;
         const data = line.slice(5).trim();
         if (data === '[DONE]') break;
         if (!data) continue;
-
         try {
           const json = JSON.parse(data);
           if (json.error) throw new Error(json.error);
@@ -594,25 +553,16 @@ async function sendMessage() {
             contentEl.innerHTML = parseMarkdown(fullText) + '<span class="cursor"></span>';
             scrollToBottom(false);
           }
-        } catch (e) {
-          if (e.message !== 'Unexpected end of JSON input') console.warn('parse:', e);
-        }
+        } catch (e) {}
       }
     }
   } catch (err) {
-    if (err.name !== 'AbortError') {
-      contentEl.innerHTML = `<p class="text-red-500">⚠️ ${esc(err.message)}</p>`;
-    }
+    if (err.name !== 'AbortError') contentEl.innerHTML = `<p class="text-red-500">⚠️ ${esc(err.message)}</p>`;
   } finally {
     contentEl.querySelector('.cursor')?.remove();
-    if (!fullText && !abortController.signal.aborted) {
-      contentEl.innerHTML = '<p class="text-gray-400">（已停止）</p>';
-    } else if (fullText) {
-      contentEl.innerHTML = parseMarkdown(fullText);
-    }
+    if (!fullText && !abortController.signal.aborted) contentEl.innerHTML = '<p class="text-gray-400">（已停止）</p>';
+    else if (fullText) contentEl.innerHTML = parseMarkdown(fullText);
     if (fullText) await History.addMessage(currentConvId, { role: 'assistant', content: fullText }, selectedModelId);
-
-    // AI Title Generation (Background)
     const currentConv = History.get(currentConvId);
     if (currentConv && currentConv.messages.length === 2) {
         (async () => {
@@ -624,25 +574,17 @@ async function sendMessage() {
                 });
                 if (titleRes.ok) {
                     const data = await titleRes.json();
-                    if (data.title) {
-                        currentConv.title = data.title;
-                        renderHistorySidebar(searchInput.value);
-                    }
+                    if (data.title) { currentConv.title = data.title; renderHistorySidebar(searchInput.value); }
                 }
-            } catch (e) { console.warn('Title gen failed', e); }
+            } catch (e) {}
         })();
     }
-
-    setStreaming(false);
-    renderHistorySidebar(searchInput.value);
-    scrollToBottom();
-    updateSendBtn();
+    setStreaming(false); renderHistorySidebar(searchInput.value); scrollToBottom(); updateSendBtn();
   }
 }
 
 // ─── Input events ─────────────────────────────────────────────────────────────
 chatInput.addEventListener('input', autoResize);
-
 chatInput.addEventListener('paste', async (e) => {
     const items = e.clipboardData.items;
     for (const item of items) {
@@ -653,39 +595,30 @@ chatInput.addEventListener('paste', async (e) => {
         }
     }
 });
-
 chatInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) {
-    if (chatInput.value.trim() !== '' || pendingAttachments.length > 0) {
-        e.preventDefault();
-        sendMessage();
-    }
+    if (chatInput.value.trim() !== '' || pendingAttachments.length > 0) { e.preventDefault(); sendMessage(); }
   }
 });
-
 sendBtn.addEventListener('click', sendMessage);
-
-// ─── Attachments ──────────────────────────────────────────────────────────────
 attachBtn.addEventListener('click', () => fileInput.click());
-
 fileInput.addEventListener('change', async () => {
-  for (const file of Array.from(fileInput.files || [])) {
-    await uploadFile(file);
-  }
+  for (const file of Array.from(fileInput.files || [])) await uploadFile(file);
   fileInput.value = '';
+});
+
+// ─── Theme listener ───────────────────────────────────────────────────────────
+window.addEventListener('theme-changed', () => {
+    updateSendBtn();
+    if (window.lucide) window.lucide.createIcons();
 });
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 let wasMobile = window.innerWidth <= 768;
-
 window.addEventListener('resize', () => {
   const isMobile = window.innerWidth <= 768;
   if (isMobile !== wasMobile) {
-    if (isMobile) {
-      closeSidebar();
-    } else {
-      openSidebar();
-    }
+    if (isMobile) closeSidebar(); else openSidebar();
     wasMobile = isMobile;
   }
 });
@@ -695,11 +628,7 @@ window.addEventListener('resize', () => {
   await loadModels();
   await History.loadFromServer();
   renderHistorySidebar();
-  
-  if (wasMobile) {
-      closeSidebar();
-  }
-  
+  if (wasMobile) closeSidebar();
   chatInput.focus();
   updateSendBtn();
 })();
