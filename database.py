@@ -1,11 +1,8 @@
 import asyncpg
 import os
 import json
-from config import DATABASE_URL
+from config import DATABASE_URL, ADMIN_USERNAME, ADMIN_PASSWORD, ADMIN_API_KEY, ADMIN_API_BASE
 from passlib.context import CryptContext
-from dotenv import load_dotenv
-
-load_dotenv()
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -59,12 +56,12 @@ async def init_db():
 
         count = await conn.fetchval("SELECT COUNT(*) FROM users")
         if count == 0:
-            hashed = pwd_context.hash("admin123")
+            hashed = pwd_context.hash(ADMIN_PASSWORD)
             await conn.execute(
                 "INSERT INTO users (username, password, api_key, api_base, model, is_admin) VALUES ($1, $2, $3, $4, $5, $6)",
-                "admin", hashed, "sk-kD3ZqjwMCrEQzTBVQ", "https://api.arctan.top/v1", "gpt-4o", 1
+                ADMIN_USERNAME, hashed, ADMIN_API_KEY, ADMIN_API_BASE, "gpt-4o", 1
             )
-            print("✅ Default admin created: admin / admin123")
+            print(f"✅ Default admin created: {ADMIN_USERNAME} / {ADMIN_PASSWORD}")
 
 async def get_user_by_username(username: str):
     pool = await get_db_pool()

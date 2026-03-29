@@ -21,7 +21,12 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://ai_chat:ai_chat@db:5432/ai_chat
+      - DATABASE_URL
+      - ADMIN_USERNAME
+      - ADMIN_PASSWORD
+      - ADMIN_API_KEY
+      - ADMIN_API_BASE
+      - SECRET_KEY
     volumes:
       - ./data:/app/data
     networks:
