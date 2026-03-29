@@ -6,7 +6,7 @@
   <title>管理后台 — AI Chat</title>
   <link rel="stylesheet" href="/static/css/style.css" />
 </head>
-<body>
+<body style="overflow:auto;height:auto">
   <div class="admin-shell">
     <nav class="admin-nav">
       <div class="admin-nav-brand">
@@ -39,15 +39,34 @@
             <input id="sys-default-model" class="form-input" type="text" placeholder="gpt-4o" />
           </div>
           <div class="form-group">
-            <label class="form-label" for="sys-model-aliases">模型映射表</label>
-            <textarea id="sys-model-aliases" class="form-input" rows="8" placeholder='{"gpt-4o":"通用模型","gpt-4.1":"高质量模型"}' style="resize:vertical;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"></textarea>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+              <label class="form-label" style="margin:0">模型展示名称</label>
+              <button type="button" class="btn btn-ghost btn-sm" id="system-fetch-models">获取系统模型</button>
+            </div>
+            <div id="system-models-loading" style="display:none;font-size:.8rem;color:var(--text-muted);padding:.4rem 0">
+              正在获取系统模型...
+            </div>
+            <div id="system-models-empty" style="font-size:.8rem;color:var(--text-muted);padding:.6rem .2rem">
+              先点击“获取系统模型”，再逐个修改前端显示名称。
+            </div>
+            <div id="system-models-table-wrap" style="display:none;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;background:var(--bg-secondary)">
+              <table class="data-table" style="margin:0">
+                <thead>
+                  <tr>
+                    <th style="width:45%">实际模型 ID</th>
+                    <th>前端显示名称</th>
+                  </tr>
+                </thead>
+                <tbody id="system-models-tbody"></tbody>
+              </table>
+            </div>
+            <textarea id="sys-model-aliases" class="form-input" rows="6" placeholder='{"gpt-4o":"通用模型","gpt-4.1":"高质量模型"}' style="resize:vertical;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;margin-top:.75rem"></textarea>
             <p style="font-size:.75rem;color:var(--text-muted);margin-top:.4rem">
-              使用 JSON 对象配置。键是实际模型 ID，值是前端显示名称。
+              上方表格用于日常编辑，这里保留 JSON 视图用于快速批量调整。
             </p>
           </div>
           <p class="error-message" id="system-error"></p>
           <div class="modal-actions" style="padding:0;margin-top:1rem">
-            <button type="button" class="btn btn-ghost btn-sm" id="system-fetch-models">从当前系统配置获取模型列表</button>
             <button type="submit" class="btn btn-accent btn-sm">保存系统设置</button>
           </div>
         </form>
@@ -155,6 +174,7 @@
     let fetchedModels = [];
     let currentAllowedModels = [];
     let systemConfig = { api_base: '', api_key: '', default_model: 'gpt-4o', model_aliases: {} };
+    let systemFetchedModels = [];
 
     const modal = document.getElementById('user-modal');
     const modalTitleTxt = document.getElementById('modal-title-text');
@@ -166,6 +186,10 @@
     const modelsLoading = document.getElementById('models-loading');
     const modelsChecklist = document.getElementById('models-checklist');
     const fetchModelsBtn = document.getElementById('fetch-models-btn');
+    const systemModelsLoading = document.getElementById('system-models-loading');
+    const systemModelsEmpty = document.getElementById('system-models-empty');
+    const systemModelsTableWrap = document.getElementById('system-models-table-wrap');
+    const systemModelsTbody = document.getElementById('system-models-tbody');
 
     function esc(s) {
       return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -190,6 +214,10 @@
       document.getElementById('sys-api-key').value = systemConfig.api_key || '';
       document.getElementById('sys-default-model').value = systemConfig.default_model || 'gpt-4o';
       document.getElementById('sys-model-aliases').value = JSON.stringify(systemConfig.model_aliases || {}, null, 2);
+      systemModelsTableWrap.style.display = 'none';
+      systemModelsEmpty.style.display = 'block';
+      systemModelsEmpty.textContent = '先点击“获取系统模型”，再逐个修改前端显示名称。';
+      systemModelsTbody.innerHTML = '';
     }
 
     async function loadUsers() {
@@ -268,6 +296,105 @@
       } finally {
         modelsLoading.style.display = 'none';
         fetchModelsBtn.disabled = false;
+      }
+    }
+
+    function normalizeAliasMap(rawText) {
+      if (!rawText) return {};
+      const parsed = JSON.parse(rawText);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('模型映射表必须是 JSON 对象');
+      }
+      const normalized = {};
+      Object.entries(parsed).forEach(([key, value]) => {
+        const modelId = String(key || '').trim();
+        const displayName = String(value || '').trim();
+        if (modelId && displayName) normalized[modelId] = displayName;
+      });
+      return normalized;
+    }
+
+    function syncAliasesTextareaFromTable() {
+      const aliases = {};
+      systemModelsTbody.querySelectorAll('tr').forEach(row => {
+        const modelId = row.dataset.modelId;
+        const input = row.querySelector('input[data-role="alias"]');
+        const value = input?.value.trim();
+        if (modelId && value) aliases[modelId] = value;
+      });
+      document.getElementById('sys-model-aliases').value = JSON.stringify(aliases, null, 2);
+      systemConfig.model_aliases = aliases;
+    }
+
+    function renderSystemModelsEditor() {
+      const aliasMap = systemConfig.model_aliases || {};
+      const mergedModels = [...systemFetchedModels];
+
+      if (!mergedModels.length) {
+        systemModelsTableWrap.style.display = 'none';
+        systemModelsEmpty.style.display = 'block';
+        systemModelsTbody.innerHTML = '';
+        return;
+      }
+
+      systemModelsEmpty.style.display = 'none';
+      systemModelsTableWrap.style.display = 'block';
+      systemModelsTbody.innerHTML = mergedModels
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .map(model => `
+          <tr data-model-id="${esc(model.id)}">
+            <td><code style="font-size:.8rem">${esc(model.id)}</code></td>
+            <td>
+              <input
+                class="form-input"
+                data-role="alias"
+                type="text"
+                placeholder="留空则显示原始模型 ID"
+                value="${esc(aliasMap[model.id] || '')}"
+                style="margin:0"
+              />
+            </td>
+          </tr>
+        `)
+        .join('');
+
+      systemModelsTbody.querySelectorAll('input[data-role="alias"]').forEach(input => {
+        input.addEventListener('input', syncAliasesTextareaFromTable);
+      });
+    }
+
+    async function fetchSystemModels() {
+      const apiBase = document.getElementById('sys-api-base').value.trim();
+      const apiKey = document.getElementById('sys-api-key').value.trim();
+      const safeKey = apiKey && apiKey.includes('***') ? '' : apiKey;
+
+      systemModelsLoading.style.display = 'block';
+      systemModelsEmpty.style.display = 'none';
+      systemModelsTableWrap.style.display = 'none';
+      document.getElementById('system-fetch-models').disabled = true;
+
+      try {
+        const params = new URLSearchParams();
+        if (apiBase) params.append('api_base', apiBase);
+        if (safeKey) params.append('api_key', safeKey);
+
+        const res = await fetch(`/api/admin/models?${params.toString()}`);
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || '获取失败');
+        }
+
+        const data = await res.json();
+        systemFetchedModels = data.data || [];
+        systemModelsEmpty.textContent = '先点击“获取系统模型”，再逐个修改前端显示名称。';
+        renderSystemModelsEditor();
+        showToast(systemFetchedModels.length ? `获取到 ${systemFetchedModels.length} 个系统模型` : '未获取到任何系统模型', systemFetchedModels.length ? 'success' : 'error');
+      } catch (err) {
+        systemModelsEmpty.style.display = 'block';
+        systemModelsEmpty.textContent = '获取系统模型失败: ' + err.message;
+      } finally {
+        systemModelsLoading.style.display = 'none';
+        document.getElementById('system-fetch-models').disabled = false;
       }
     }
 
@@ -373,11 +500,7 @@
       const aliasesRaw = document.getElementById('sys-model-aliases').value.trim();
       if (aliasesRaw) {
         try {
-          const parsed = JSON.parse(aliasesRaw);
-          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-            throw new Error('模型映射表必须是 JSON 对象');
-          }
-          body.model_aliases = parsed;
+          body.model_aliases = normalizeAliasMap(aliasesRaw);
         } catch (err) {
           systemError.textContent = err.message || '模型映射表格式错误';
           return;
@@ -399,8 +522,17 @@
       }
     });
 
-    document.getElementById('system-fetch-models').addEventListener('click', fetchModelsFromCurrentConfig);
+    document.getElementById('system-fetch-models').addEventListener('click', fetchSystemModels);
     fetchModelsBtn.addEventListener('click', fetchModelsFromCurrentConfig);
+    document.getElementById('sys-model-aliases').addEventListener('change', () => {
+      try {
+        systemConfig.model_aliases = normalizeAliasMap(document.getElementById('sys-model-aliases').value.trim());
+        renderSystemModelsEditor();
+        systemError.textContent = '';
+      } catch (err) {
+        systemError.textContent = err.message || '模型映射表格式错误';
+      }
+    });
 
     document.getElementById('user-form').addEventListener('submit', async (e) => {
       e.preventDefault();
