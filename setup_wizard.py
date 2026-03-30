@@ -12,7 +12,7 @@ except ImportError:
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-ENV_PATH = Path(".env")
+ENV_PATH = Path(__file__).resolve().parent / ".env"
 
 
 def is_postgres_url(database_url: str) -> bool:
