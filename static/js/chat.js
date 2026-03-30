@@ -58,6 +58,7 @@ function setupMarked() {
   if (typeof window.marked === 'undefined') return;
   marked.setOptions({ breaks: true, gfm: true });
   const renderer = new marked.Renderer();
+  const slugger = new marked.Slugger();
   renderer.code = (code, lang) => {
     const language = lang || 'plaintext';
     let highlighted;
@@ -80,6 +81,11 @@ function setupMarked() {
         <pre><code class="hljs">${highlighted}</code></pre>
       </div>
     </div>`;
+  };
+  renderer.heading = (text, level, raw) => {
+    const headingText = typeof raw === 'string' && raw.trim() ? raw : String(text ?? '');
+    const id = slugger.slug(headingText);
+    return `<h${level} id="${esc(id)}">${text}</h${level}>`;
   };
   marked.use({ renderer });
 }
@@ -127,10 +133,14 @@ function renderKatexExpression(expression, displayMode) {
 }
 
 function renderMarkdownWithMath(text) {
+  const escapedDollarToken = '__AI_CHAT_ESCAPED_DOLLAR__';
   return text
+    .replace(/\\\$/g, escapedDollarToken)
     .replace(/\\\[((?:.|\r?\n)*?)\\\]/g, (_, expr) => `\n\n${renderKatexExpression(expr.trim(), true)}\n\n`)
     .replace(/\$\$([\s\S]*?)\$\$/g, (_, expr) => `\n\n${renderKatexExpression(expr.trim(), true)}\n\n`)
-    .replace(/\\\(((?:.|\r?\n)*?)\\\)/g, (_, expr) => renderKatexExpression(expr.trim(), false));
+    .replace(/\\\(((?:.|\r?\n)*?)\\\)/g, (_, expr) => renderKatexExpression(expr.trim(), false))
+    .replace(/(^|[^\\])\$([^\n$]+?)\$/g, (_, prefix, expr) => `${prefix}${renderKatexExpression(expr.trim(), false)}`)
+    .replaceAll(escapedDollarToken, '$');
 }
 
 function renderAssistantContent(element, text) {

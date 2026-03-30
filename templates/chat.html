@@ -47,6 +47,41 @@
     
     .markdown-body { min-width: 0; max-width: 100%; overflow-x: hidden; overflow-wrap: anywhere; word-break: break-word; }
     .markdown-body > * { max-width: 100%; }
+    .markdown-body h1,
+    .markdown-body h2,
+    .markdown-body h3,
+    .markdown-body h4,
+    .markdown-body h5,
+    .markdown-body h6 {
+      margin: 1rem 0 0.6rem;
+      font-weight: 700;
+      line-height: 1.35;
+    }
+    .markdown-body p { margin: 0.55rem 0; }
+    .markdown-body ul,
+    .markdown-body ol {
+      margin: 0.6rem 0 0.8rem;
+      padding-left: 1.5rem;
+    }
+    .markdown-body ul { list-style: disc; }
+    .markdown-body ol { list-style: decimal; }
+    .markdown-body li { margin: 0.28rem 0; }
+    .markdown-body li > ul,
+    .markdown-body li > ol {
+      margin-top: 0.35rem;
+      margin-bottom: 0.35rem;
+    }
+    .markdown-body blockquote {
+      margin: 0.8rem 0;
+      padding: 0.2rem 0 0.2rem 0.9rem;
+      border-left: 3px solid var(--border-color);
+      color: var(--text-muted);
+    }
+    .markdown-body hr {
+      border: 0;
+      border-top: 1px solid var(--border-color);
+      margin: 1rem 0;
+    }
     .markdown-body pre,
     .markdown-body table,
     .markdown-body .katex-display {
@@ -240,14 +275,14 @@
                 </div>
             </div>
             <div class="text-center text-[10px] text-[var(--text-muted)] mt-2">
-                AI 也可能会犯错。请核查重要信息。| v3.3-Mobile-Math
+                AI 也可能会犯错。请核查重要信息。| v3.5-Inline-Math
             </div>
         </div>
     </div>
   </div>
 
-  <script src="/static/js/history.js?v=3.3"></script>
-  <script src="/static/js/chat.js?v=3.3"></script>
+  <script src="/static/js/history.js?v=3.5"></script>
+  <script src="/static/js/chat.js?v=3.5"></script>
   <script>lucide.createIcons();</script>
 </body>
 </html>
