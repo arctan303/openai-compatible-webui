@@ -101,22 +101,9 @@ async def _init_postgres():
             )
         """)
 
-        try:
-            await conn.execute("ALTER TABLE conversations ADD COLUMN model VARCHAR NOT NULL DEFAULT 'gpt-4o'")
-        except Exception:
-            pass
-
-        try:
-            await conn.execute("ALTER TABLE users ADD COLUMN allowed_models VARCHAR DEFAULT NULL")
-        except asyncpg.exceptions.DuplicateColumnError:
-            pass
-        except Exception:
-            pass
-
-        try:
-            await conn.execute("ALTER TABLE system_config ADD COLUMN model_aliases TEXT")
-        except Exception:
-            pass
+        await conn.execute("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS model VARCHAR NOT NULL DEFAULT 'gpt-4o'")
+        await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS allowed_models VARCHAR DEFAULT NULL")
+        await conn.execute("ALTER TABLE system_config ADD COLUMN IF NOT EXISTS model_aliases TEXT")
 
         system_count = await conn.fetchval("SELECT COUNT(*) FROM system_config")
         if system_count == 0:
