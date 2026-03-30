@@ -7,8 +7,11 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
   <link rel="stylesheet" id="hljs-style" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
   <style>
     /* Theme Variables */
     :root {
@@ -89,7 +92,7 @@
                     <path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A6.0651 6.0651 0 0 0 19.0192 19.818a5.9847 5.9847 0 0 0 3.9977-2.9001 6.0462 6.0462 0 0 0-.735-7.0968zM8.7504 6.2574a4.356 4.356 0 0 1 3.246-1.5437 4.3368 4.3368 0 0 1 3.2268 1.5247l-5.8344 3.3826a1.5997 1.5997 0 0 0-.8135 1.406v5.3544c-.0155.0466-.062.062-.093.0466L4.3402 14.04a4.3463 4.3463 0 0 1 1.2585-6.611l3.1517-1.1716zm9.8514 1.5437l-4.142 2.3837v4.7674l5.8344-3.3826a4.3463 4.3463 0 0 1-1.6924-4.8216c.0155-.0465.0465-.062.093-.062l4.142.0465a4.356 4.356 0 0 1-4.235 1.0686zM5.4013 15.115l4.142-2.3837V7.9638L3.7088 11.346a4.3463 4.3463 0 0 1 1.6925 4.8216c-.0155.0466-.0465.062-.093.062l-4.142-.0465a4.356 4.356 0 0 1 4.235-1.0686zM14.2357 7.025h-4.4714l2.2357-3.8724 2.2357 3.8724zm-6.1492 10.368l-2.2357-3.8724 4.142-2.3837-1.9063 6.2561zm8.3849-6.2561l4.142 2.3837-2.2357 3.8724-1.9063-6.2561zm-4.4714 6.0967h4.4714l-2.2357 3.8724-2.2357-3.8724z" fill="currentColor" />
                 </svg>
             </div>
-            <button id="sidebar-close" class="p-2 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] rounded-lg transition-colors">
+            <button id="sidebar-close" class="p-2 text-[var(--text-muted)] hover:bg-[var(--hover-bg)] rounded-lg transition-colors md:hidden">
                 <i data-lucide="panel-left-close" class="w-5 h-5"></i>
             </button>
         </div>
@@ -115,6 +118,7 @@
         </div>
         <div id="history-list" class="space-y-0.5">
             <div id="history-loading" class="flex flex-col gap-2 px-2 py-4 hidden">
+                <div class="text-[11px] text-[var(--text-muted)] px-1">正在加载聊天记录...</div>
                 <div class="h-8 bg-[var(--hover-bg)] animate-pulse rounded-lg w-full"></div>
                 <div class="h-8 bg-[var(--hover-bg)] animate-pulse rounded-lg w-[90%]"></div>
                 <div class="h-8 bg-[var(--hover-bg)] animate-pulse rounded-lg w-[95%]"></div>
@@ -222,14 +226,14 @@
                 </div>
             </div>
             <div class="text-center text-[10px] text-[var(--text-muted)] mt-2">
-                AI 也可能会犯错。请核查重要信息。| v2.7-Instant-Sidebar
+                AI 也可能会犯错。请核查重要信息。| v3.1-Setup-Wizard
             </div>
         </div>
     </div>
   </div>
 
-  <script src="/static/js/history.js?v=2.6"></script>
-  <script src="/static/js/chat.js?v=2.6"></script>
+  <script src="/static/js/history.js?v=3.1"></script>
+  <script src="/static/js/chat.js?v=3.1"></script>
   <script>lucide.createIcons();</script>
 </body>
 </html>

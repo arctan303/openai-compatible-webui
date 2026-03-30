@@ -1,56 +1,85 @@
 # AI Chat
 
-一个基于 FastAPI 的聊天系统，支持两种数据库模式：
+FastAPI chat service with two install modes:
 
-- 本地开发：SQLite，零依赖，按需启动
-- 生产部署：PostgreSQL
+- PostgreSQL with Docker: recommended for service deployment
+- SQLite file mode: useful for lightweight local use
 
-## 本地开发
+## Quick Start
 
-本地默认直接使用 SQLite 文件，不需要常驻 PostgreSQL。
+Clone the repo, then run:
 
-1. 安装 Python 3.11
-2. 创建虚拟环境并安装依赖
-3. 复制 `.env.example` 为 `.env`
-4. 启动：
-
-```bash
-python main.py
+```powershell
+.\install.ps1
 ```
 
-默认数据库文件为 `data/chat.db`。不用时直接关闭进程即可，没有额外数据库服务需要常驻。
+The installer will ask which storage mode you want:
 
-## 生产部署
+1. `PostgreSQL with Docker`
+2. `SQLite file mode`
 
-生产环境继续使用 PostgreSQL，只需要把 `DATABASE_URL` 配成：
+It writes `.env` for you.
+
+## PostgreSQL Mode
+
+Recommended for real deployment.
+
+What the installer does:
+
+- writes Docker/PostgreSQL settings into `.env`
+- sets bootstrap admin and system config
+- can start `app + postgres` with `docker compose up -d --build`
+
+Manual start command:
+
+```powershell
+docker compose up -d --build
+```
+
+Default services in [docker-compose.yml](C:/git/ai-chat/docker-compose.yml):
+
+- `app`
+- `postgres`
+
+## SQLite Mode
+
+Useful when you do not want a database service.
+
+The installer writes:
 
 ```env
-DATABASE_URL=postgresql://ai_chat:your_password@localhost:5432/ai_chat
+DATABASE_URL=sqlite:///data/chat.db
 ```
 
-其余规则不变：
+Then run the app locally:
 
-- `.env` 只负责启动期配置和首次初始化
-- 数据库负责系统运行配置和用户业务配置
+```powershell
+py -3.13 main.py
+```
 
-## `.env` 中保留的内容
+SQLite database file:
 
-- `DATABASE_URL`
-- `SECRET_KEY`
+- [chat.db](C:/git/ai-chat/data/chat.db)
+
+## Bootstrap Rules
+
+These values are used for first initialization:
+
 - `BOOTSTRAP_ADMIN_USERNAME`
 - `BOOTSTRAP_ADMIN_PASSWORD`
-- `BOOTSTRAP_SYSTEM_API_KEY`
 - `BOOTSTRAP_SYSTEM_API_BASE`
+- `BOOTSTRAP_SYSTEM_API_KEY`
 - `BOOTSTRAP_SYSTEM_MODEL`
 
-## 运行期数据库配置
+Runtime system config is stored in the database after initialization.
 
-- `system_config` 表：
-  - 系统 `api_base`
-  - 系统 `api_key`
-  - 系统默认模型
-- `users` 表：
-  - 用户账号密码
-  - 用户专用 `api_key`
-  - 用户默认模型
-  - 用户模型白名单
+## One-Time Setup Wizard
+
+There is also an admin-only setup wizard at `/setup`.
+
+Rules:
+
+- you must log in as admin first
+- the wizard is controlled by `SETUP_WIZARD_ENABLED`
+- after successful initialization, the app writes `SETUP_WIZARD_ENABLED=false` into `.env`
+- after that, changing database/bootstrap config should be done by editing `.env` and restarting

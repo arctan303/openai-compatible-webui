@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>初始化向导 - AI Chat</title>
+  <meta name="description" content="首次部署向导：连接数据库、创建管理员、初始化系统配置" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+<div class="login-page">
+  <div class="login-card" style="max-width: 640px;">
+    <div class="login-logo">
+      <div class="logo-mark">AI</div>
+      <h1>初始化向导</h1>
+    </div>
+
+    <p class="login-subtitle">管理员登录后使用。连接数据库，设置管理员账户，并初始化系统配置。初始化成功后该向导会自动关闭。v3.1-Setup-Wizard</p>
+
+    <form id="setup-form" novalidate>
+      <div class="form-group">
+        <label class="form-label" for="database-url">数据库连接</label>
+        <input id="database-url" class="form-input" type="text" value="{{ database_url }}" placeholder="postgresql://user:password@127.0.0.1:5432/ai_chat" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="admin-username">管理员用户名</label>
+        <input id="admin-username" class="form-input" type="text" value="{{ admin_username }}" placeholder="admin" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="admin-password">管理员密码</label>
+        <input id="admin-password" class="form-input" type="password" placeholder="请输入管理员密码" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="system-api-base">System API Base</label>
+        <input id="system-api-base" class="form-input" type="text" value="{{ system_api_base }}" placeholder="https://api.openai.com/v1" required />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="system-api-key">System API Key</label>
+        <input id="system-api-key" class="form-input" type="text" placeholder="可选，留空表示稍后去后台填写" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="system-model">系统默认模型</label>
+        <input id="system-model" class="form-input" type="text" value="{{ system_model }}" placeholder="gpt-4o" />
+      </div>
+
+      <div class="form-group" style="font-size:.82rem;color:var(--text-muted);line-height:1.6">
+        <div>1. 可以直接填 PostgreSQL 连接，例如 `postgresql://user:password@127.0.0.1:5432/ai_chat`。</div>
+        <div>2. 提交后会自动建表、写入管理员、写入系统配置，并更新本地 `.env`。</div>
+        <div>3. 如果切换了数据库连接，当前服务需要重启后才会切到新数据库。</div>
+      </div>
+
+      <button type="submit" class="btn-login" id="setup-btn">初始化系统</button>
+      <p class="error-msg" id="setup-error" role="alert"></p>
+      <p class="login-subtitle" id="setup-success" style="margin-top:.75rem;margin-bottom:0;color:#166534;"></p>
+    </form>
+
+    <p class="login-subtitle" style="margin-top:1rem;margin-bottom:0;">
+      <a href="/" style="color:var(--text-muted);text-decoration:none;">返回登录</a>
+    </p>
+  </div>
+</div>
+
+<script>
+  const form = document.getElementById('setup-form');
+  const btn = document.getElementById('setup-btn');
+  const errorEl = document.getElementById('setup-error');
+  const successEl = document.getElementById('setup-success');
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorEl.textContent = '';
+    successEl.textContent = '';
+    btn.disabled = true;
+    btn.textContent = '初始化中...';
+
+    const payload = {
+      database_url: document.getElementById('database-url').value.trim(),
+      admin_username: document.getElementById('admin-username').value.trim(),
+      admin_password: document.getElementById('admin-password').value,
+      system_api_base: document.getElementById('system-api-base').value.trim(),
+      system_api_key: document.getElementById('system-api-key').value.trim(),
+      system_model: document.getElementById('system-model').value.trim() || 'gpt-4o',
+    };
+
+    try {
+      const res = await fetch('/api/setup/initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || '初始化失败');
+
+      successEl.textContent = data.restart_required
+        ? '初始化完成。已写入 .env，并初始化目标数据库。请重启服务后再登录。'
+        : '初始化完成。当前服务可以直接使用。';
+    } catch (err) {
+      errorEl.textContent = err.message || '初始化失败';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '初始化系统';
+    }
+  });
+</script>
+</body>
+</html>

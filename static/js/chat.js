@@ -12,6 +12,11 @@ let pendingAttachments = [];
 let allConvs = [];
 let selectedModelId = null;
 let modelDisplayMap = {};
+const initialConvId = (() => {
+  const parts = window.location.pathname.split('/').filter(Boolean);
+  if (parts[0] === 'chat' && parts[1]) return decodeURIComponent(parts[1]);
+  return null;
+})();
 
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
 const sidebar         = document.getElementById('sidebar');
@@ -84,6 +89,11 @@ window.addEventListener('DOMContentLoaded', () => {
     if (window.lucide) window.lucide.createIcons();
 });
 
+window.addEventListener('load', () => {
+  rerenderAssistantMessages();
+  setTimeout(rerenderAssistantMessages, 300);
+});
+
 window.copyCode = function(btn) {
   const wrapper = btn.closest('.group');
   const code = wrapper.querySelector('code').innerText;
@@ -95,10 +105,64 @@ window.copyCode = function(btn) {
 };
 
 function parseMarkdown(text) {
-  if (typeof marked === 'undefined') return esc(text).replace(/\n/g, '<br>');
-  const html = marked.parse(text);
+  const source = renderMarkdownWithMath(typeof text === 'string' ? text : String(text ?? ''));
+  if (typeof marked === 'undefined') return source.replace(/\n/g, '<br>');
+  const html = marked.parse(source);
   setTimeout(() => window.lucide && window.lucide.createIcons(), 0);
   return html;
+}
+
+function renderKatexExpression(expression, displayMode) {
+  if (typeof window.katex?.renderToString !== 'function') {
+    return displayMode ? `\n${expression}\n` : expression;
+  }
+  try {
+    return window.katex.renderToString(expression, {
+      throwOnError: false,
+      displayMode
+    });
+  } catch {
+    return displayMode ? `\n${expression}\n` : expression;
+  }
+}
+
+function renderMarkdownWithMath(text) {
+  return text
+    .replace(/\\\[((?:.|\r?\n)*?)\\\]/g, (_, expr) => `\n\n${renderKatexExpression(expr.trim(), true)}\n\n`)
+    .replace(/\$\$([\s\S]*?)\$\$/g, (_, expr) => `\n\n${renderKatexExpression(expr.trim(), true)}\n\n`)
+    .replace(/\\\(((?:.|\r?\n)*?)\\\)/g, (_, expr) => renderKatexExpression(expr.trim(), false));
+}
+
+function renderAssistantContent(element, text) {
+  if (!element) return;
+  element.innerHTML = parseMarkdown(text);
+  if (window.lucide) window.lucide.createIcons();
+}
+
+function rerenderAssistantMessages() {
+  document.querySelectorAll('.message-row .markdown-body').forEach(element => {
+    const text = element?.dataset?.rawText;
+    if (typeof text === 'string' && text.length > 0) {
+      renderAssistantContent(element, text);
+      return;
+    }
+  });
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getConversationUrl(convId) {
+  return convId ? `/chat/${encodeURIComponent(convId)}` : '/chat';
+}
+
+function syncConversationUrl(convId, replace = false) {
+  const nextUrl = getConversationUrl(convId);
+  const currentUrl = `${window.location.pathname}${window.location.search}`;
+  if (currentUrl === nextUrl) return;
+  const method = replace ? 'replaceState' : 'pushState';
+  window.history[method]({}, '', nextUrl);
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -331,22 +395,60 @@ modelPillBtn.addEventListener('click', (e) => {
 });
 
 // ─── Sidebar toggle ───────────────────────────────────────────────────────────
+function isDesktopViewport() {
+    return window.innerWidth >= 768;
+}
+
+let sidebarDesktopOpen = isDesktopViewport();
+let sidebarMobileOpen = false;
+
+function applySidebarState() {
+    const desktop = isDesktopViewport();
+    const isOpen = desktop ? sidebarDesktopOpen : sidebarMobileOpen;
+
+    sidebar.style.width = isOpen ? '260px' : '0px';
+    sidebar.style.borderRightWidth = isOpen ? '1px' : '0px';
+
+    if (desktop) {
+        sidebarOpen.classList.remove('hidden');
+        sidebarBackdrop.classList.add('hidden');
+    } else {
+        sidebarOpen.classList.toggle('hidden', isOpen);
+        sidebarBackdrop.classList.toggle('hidden', !isOpen);
+    }
+
+    sidebarOpen.setAttribute('aria-expanded', String(isOpen));
+}
+
 function closeSidebar() {
-    sidebar.classList.remove('w-[260px]', 'border-r');
-    sidebar.classList.add('w-0');
-    sidebarOpen.classList.remove('hidden');
-    sidebarBackdrop.classList.add('hidden');
+    if (isDesktopViewport()) {
+        sidebarDesktopOpen = false;
+    } else {
+        sidebarMobileOpen = false;
+    }
+    applySidebarState();
 }
 
 function openSidebar() {
-    sidebar.classList.remove('w-0');
-    sidebar.classList.add('w-[260px]', 'border-r');
-    sidebarOpen.classList.add('hidden');
-    sidebarBackdrop.classList.remove('hidden');
+    if (isDesktopViewport()) {
+        sidebarDesktopOpen = true;
+    } else {
+        sidebarMobileOpen = true;
+    }
+    applySidebarState();
+}
+
+function toggleSidebar() {
+    if (isDesktopViewport()) {
+        sidebarDesktopOpen = !sidebarDesktopOpen;
+        applySidebarState();
+        return;
+    }
+    openSidebar();
 }
 
 sidebarClose.addEventListener('click', closeSidebar);
-sidebarOpen.addEventListener('click', openSidebar);
+sidebarOpen.addEventListener('click', toggleSidebar);
 sidebarBackdrop.addEventListener('click', closeSidebar);
 
 // ─── User dropdown ────────────────────────────────────────────────────────────
@@ -372,15 +474,19 @@ logoutBtn.addEventListener('click', async () => {
 
 // ─── History sidebar ──────────────────────────────────────────────────────────
 async function refreshHistory(filter = '') {
+  const startedAt = Date.now();
   if (refreshHistoryBtn) {
       refreshHistoryBtn.classList.add('animate-spin-fast');
       refreshHistoryBtn.disabled = true;
   }
+  historyList.querySelectorAll('.history-item').forEach(el => el.remove());
   if (historyLoading) historyLoading.classList.remove('hidden');
   if (historyEmpty) historyEmpty.classList.add('hidden');
   
   try {
     await History.loadFromServer();
+    const remaining = 700 - (Date.now() - startedAt);
+    if (remaining > 0) await delay(remaining);
     renderHistorySidebar(filter);
   } finally {
     if (historyLoading) historyLoading.classList.add('hidden');
@@ -418,6 +524,24 @@ function renderHistorySidebar(filter = '') {
       else renderHistorySidebar(searchInput.value);
     });
 
+    const titleEl = item.querySelector('span.flex-1');
+    if (titleEl) {
+      titleEl.outerHTML = `<a href="${getConversationUrl(conv.id)}" class="history-item-link truncate ${isActive ? 'text-[var(--text-main)] font-medium' : 'text-[var(--text-muted)]'} flex-1">${esc(conv.title || '新对话')}</a>`;
+    }
+
+    const titleLink = item.querySelector('.history-item-link');
+    if (titleLink) {
+      titleLink.addEventListener('click', (e) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) {
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        loadConversation(conv.id);
+        if (window.innerWidth <= 768) closeSidebar();
+      });
+    }
+
     item.addEventListener('click', () => {
         loadConversation(conv.id);
         if (window.innerWidth <= 768) closeSidebar();
@@ -429,10 +553,20 @@ function renderHistorySidebar(filter = '') {
 
 if (searchInput) searchInput.addEventListener('input', () => renderHistorySidebar(searchInput.value));
 if (refreshHistoryBtn) refreshHistoryBtn.addEventListener('click', () => refreshHistory(searchInput?.value || ''));
+window.addEventListener('popstate', () => {
+  const parts = window.location.pathname.split('/').filter(Boolean);
+  const convId = parts[0] === 'chat' && parts[1] ? decodeURIComponent(parts[1]) : null;
+  if (convId && History.get(convId)) {
+    loadConversation(convId);
+    return;
+  }
+  startNewChat();
+});
 
 // ─── Chat Lifecycle ───────────────────────────────────────────────────────────
 function startNewChat() {
   currentConvId = null;
+  syncConversationUrl(null);
   messagesContainer.querySelectorAll('.message-row').forEach(e => e.remove());
   if (emptyState) emptyState.classList.remove('hidden');
   pendingAttachments = [];
@@ -450,6 +584,7 @@ function loadConversation(id) {
   const conv = History.get(id);
   if (!conv) return;
   currentConvId = id;
+  syncConversationUrl(id);
   messagesContainer.querySelectorAll('.message-row').forEach(e => e.remove());
   if (emptyState) emptyState.classList.add('hidden');
   conv.messages.forEach(msg => renderMessage(msg.role, msg.content, msg.attachments));
@@ -489,10 +624,17 @@ function renderMessage(role, content, attachments = []) {
     wrap.innerHTML = `
       <div class="flex justify-start w-full group">
           <div class="w-8 h-8 rounded-full border border-[var(--border-color)] flex items-center justify-center shrink-0 mr-4 font-bold tracking-tighter text-sm pb-0.5 text-[var(--text-main)] bg-[var(--bg-main)]">✦</div>
-          <div class="flex-1 min-w-0 text-[15.5px] leading-relaxed text-[var(--text-main)] markdown-body">${parseMarkdown(text)}</div>
+          <div class="flex-1 min-w-0 text-[15.5px] leading-relaxed text-[var(--text-main)] markdown-body" data-raw-text=""></div>
       </div>`;
   }
   messagesContainer.appendChild(wrap);
+  if (role === 'assistant') {
+    const body = wrap.querySelector('.markdown-body');
+    if (body) {
+      body.dataset.rawText = typeof content === 'string' ? content : '';
+      renderAssistantContent(body, body.dataset.rawText);
+    }
+  }
   if (window.lucide) window.lucide.createIcons();
   return wrap;
 }
@@ -575,7 +717,9 @@ async function sendMessage() {
           const delta = json.choices?.[0]?.delta?.content;
           if (delta) {
             fullText += delta;
-            contentEl.innerHTML = parseMarkdown(fullText) + '<span class="cursor"></span>';
+            contentEl.dataset.rawText = fullText;
+            renderAssistantContent(contentEl, fullText);
+            contentEl.innerHTML += '<span class="cursor"></span>';
             scrollToBottom(false);
           }
         } catch (e) {}
@@ -586,7 +730,10 @@ async function sendMessage() {
   } finally {
     contentEl.querySelector('.cursor')?.remove();
     if (!fullText && !abortController.signal.aborted) contentEl.innerHTML = '<p class="text-gray-400">（已停止）</p>';
-    else if (fullText) contentEl.innerHTML = parseMarkdown(fullText);
+    else if (fullText) {
+      contentEl.dataset.rawText = fullText;
+      renderAssistantContent(contentEl, fullText);
+    }
     if (fullText) await History.addMessage(currentConvId, { role: 'assistant', content: fullText }, selectedModelId);
     const currentConv = History.get(currentConvId);
     if (currentConv && currentConv.messages.length === 2) {
@@ -641,11 +788,14 @@ window.addEventListener('theme-changed', () => {
 });
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
-let wasMobile = window.innerWidth <= 768;
+let wasMobile = !isDesktopViewport();
 window.addEventListener('resize', () => {
-  const isMobile = window.innerWidth <= 768;
+  const isMobile = !isDesktopViewport();
   if (isMobile !== wasMobile) {
-    if (isMobile) closeSidebar(); else openSidebar();
+    if (isMobile) {
+      sidebarMobileOpen = false;
+    }
+    applySidebarState();
     wasMobile = isMobile;
   }
 });
@@ -654,7 +804,14 @@ window.addEventListener('resize', () => {
   await loadUser();
   await loadModels();
   await refreshHistory();
-  if (wasMobile) closeSidebar();
+  if (initialConvId) {
+    if (History.get(initialConvId)) {
+      loadConversation(initialConvId);
+    } else {
+      syncConversationUrl(null, true);
+    }
+  }
+  applySidebarState();
   if (chatInput) chatInput.focus();
   updateSendBtn();
 })();

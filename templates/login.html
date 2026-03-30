@@ -3,20 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>登录 — AI Chat</title>
+  <title>登录 - AI Chat</title>
   <meta name="description" content="登录 AI Chat 账号" />
   <link rel="stylesheet" href="/static/css/style.css" />
 </head>
 <body>
 <div class="login-page">
   <div class="login-card">
-
     <div class="login-logo">
-      <div class="logo-mark">✦</div>
+      <div class="logo-mark">AI</div>
       <h1>AI Chat</h1>
     </div>
 
-    <p class="login-subtitle">登录你的账号</p>
+    <p class="login-subtitle">登录你的账号 · v3.1-Setup-Wizard</p>
 
     <form id="login-form" autocomplete="on" novalidate>
       <div class="form-group">
@@ -45,19 +44,21 @@
       </div>
 
       <button type="submit" class="btn-login" id="login-btn">登录</button>
-
       <p class="error-msg" id="error-msg" role="alert"></p>
     </form>
 
+    <p class="login-subtitle" style="margin-top:1rem;margin-bottom:0;">
+      首次部署请先使用默认管理员账号登录，登录后访问 <a href="/setup" style="color:var(--text-muted);text-decoration:none;">/setup</a>。初始化完成后该入口会自动关闭。
+    </p>
   </div>
 </div>
 
 <script>
-  const form    = document.getElementById('login-form');
-  const btn     = document.getElementById('login-btn');
+  const form = document.getElementById('login-form');
+  const btn = document.getElementById('login-btn');
   const errorEl = document.getElementById('error-msg');
-  const uInput  = document.getElementById('username');
-  const pInput  = document.getElementById('password');
+  const uInput = document.getElementById('username');
+  const pInput = document.getElementById('password');
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -71,7 +72,7 @@
     if (!password) { pInput.classList.add('error'); pInput.focus(); return; }
 
     btn.disabled = true;
-    btn.textContent = '登录中…';
+    btn.textContent = '登录中...';
 
     try {
       const res = await fetch('/api/auth/login', {

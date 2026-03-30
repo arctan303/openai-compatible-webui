@@ -13,8 +13,18 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 import database
+import setup_wizard
 from auth import create_access_token, decode_token
-from config import MAX_UPLOAD_SIZE, ALLOWED_EXTENSIONS, SECRET_KEY
+from config import (
+    MAX_UPLOAD_SIZE,
+    ALLOWED_EXTENSIONS,
+    SECRET_KEY,
+    DATABASE_URL,
+    BOOTSTRAP_ADMIN_USERNAME,
+    BOOTSTRAP_SYSTEM_API_BASE,
+    BOOTSTRAP_SYSTEM_MODEL,
+    SETUP_WIZARD_ENABLED,
+)
 
 
 @asynccontextmanager
@@ -83,6 +93,11 @@ async def chat_page(request: Request, user=Depends(get_current_user)):
     return templates.TemplateResponse("chat.html", {"request": request})
 
 
+@app.get("/chat/{conv_id}", response_class=HTMLResponse)
+async def chat_page_with_conversation(conv_id: str, request: Request, user=Depends(get_current_user)):
+    return templates.TemplateResponse("chat.html", {"request": request, "conv_id": conv_id})
+
+
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_page(request: Request):
     token = request.cookies.get("access_token")
@@ -97,6 +112,32 @@ async def admin_page(request: Request):
     return templates.TemplateResponse("admin.html", {"request": request})
 
 
+@app.get("/setup", response_class=HTMLResponse)
+async def setup_page(request: Request):
+    if not SETUP_WIZARD_ENABLED:
+        return RedirectResponse(url="/admin")
+    token = request.cookies.get("access_token")
+    if not token:
+        return RedirectResponse(url="/")
+    payload = decode_token(token)
+    if not payload:
+        return RedirectResponse(url="/")
+    user = await database.get_user_by_id(int(payload.get("sub")))
+    if not user or not user["is_admin"]:
+        return RedirectResponse(url="/chat")
+
+    return templates.TemplateResponse(
+        "setup.html",
+        {
+            "request": request,
+            "database_url": DATABASE_URL,
+            "admin_username": BOOTSTRAP_ADMIN_USERNAME,
+            "system_api_base": BOOTSTRAP_SYSTEM_API_BASE,
+            "system_model": BOOTSTRAP_SYSTEM_MODEL,
+        },
+    )
+
+
 # ─────────────────────────────────────────────
 # Auth API
 # ─────────────────────────────────────────────
@@ -104,6 +145,15 @@ async def admin_page(request: Request):
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class SetupInitializeRequest(BaseModel):
+    database_url: str
+    admin_username: str
+    admin_password: str
+    system_api_base: str
+    system_api_key: str = ""
+    system_model: str = "gpt-4o"
 
 
 @app.post("/api/auth/login")
@@ -137,6 +187,66 @@ async def login(body: LoginRequest, response: Response):
 async def logout(response: Response):
     response.delete_cookie("access_token")
     return {"ok": True}
+
+
+@app.get("/api/setup/status")
+async def setup_status(admin=Depends(require_admin)):
+    if not SETUP_WIZARD_ENABLED:
+        raise HTTPException(status_code=403, detail="初始化向导已关闭，请改 .env 后重启服务")
+    return {
+        "database_url": DATABASE_URL,
+        "is_postgres": setup_wizard.is_postgres_url(DATABASE_URL),
+        "using_default_sqlite": DATABASE_URL == "sqlite:///data/chat.db",
+        "setup_wizard_enabled": SETUP_WIZARD_ENABLED,
+    }
+
+
+@app.post("/api/setup/initialize")
+async def setup_initialize(body: SetupInitializeRequest, admin=Depends(require_admin)):
+    if not SETUP_WIZARD_ENABLED:
+        raise HTTPException(status_code=403, detail="初始化向导已关闭，请改 .env 后重启服务")
+
+    database_url = body.database_url.strip()
+    admin_username = body.admin_username.strip()
+    admin_password = body.admin_password
+    system_api_base = body.system_api_base.strip()
+    system_api_key = body.system_api_key.strip()
+    system_model = body.system_model.strip() or "gpt-4o"
+
+    if not database_url:
+        raise HTTPException(status_code=400, detail="数据库连接不能为空")
+    if not admin_username:
+        raise HTTPException(status_code=400, detail="管理员用户名不能为空")
+    if not admin_password:
+        raise HTTPException(status_code=400, detail="管理员密码不能为空")
+    if not system_api_base:
+        raise HTTPException(status_code=400, detail="System API Base 不能为空")
+
+    try:
+        await setup_wizard.initialize_database(
+            database_url=database_url,
+            admin_username=admin_username,
+            admin_password=admin_password,
+            system_api_base=system_api_base,
+            system_api_key=system_api_key,
+            system_model=system_model,
+        )
+        setup_wizard.write_env_file(
+            database_url=database_url,
+            admin_username=admin_username,
+            admin_password=admin_password,
+            system_api_base=system_api_base,
+            system_api_key=system_api_key,
+            system_model=system_model,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"初始化失败: {str(e)}")
+
+    return {
+        "ok": True,
+        "restart_required": database_url != DATABASE_URL,
+        "message": "初始化完成",
+    }
 
 
 @app.get("/api/auth/me")

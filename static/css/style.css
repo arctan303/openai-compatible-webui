@@ -211,6 +211,21 @@ body {
 }
 
 .admin-title { font-size: 1.2rem; font-weight: 600; }
+.spacer { flex: 1; }
+.form-label {
+  display: block;
+  font-size: .78rem;
+  font-weight: 500;
+  margin-bottom: .35rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.error-message {
+  min-height: 1.2em;
+  color: var(--danger);
+  font-size: .82rem;
+  margin-top: .6rem;
+}
 
 .card {
   background: var(--bg);
@@ -278,6 +293,25 @@ body {
 
 .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
 .btn-ghost:hover { background: var(--bg-msg); color: var(--text); }
+.btn-danger { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+.btn-danger:hover { background: #fecaca; }
+.btn-sm { padding: .38rem .8rem; font-size: .8125rem; }
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.icon-btn:hover {
+  background: var(--bg-msg);
+  color: var(--text);
+}
 
 /* modal */
 .modal-overlay {
@@ -334,3 +368,5 @@ body {
   font-size: .875rem;
   z-index: 9999;
 }
+.toast.success { background: #166534; }
+.toast.error { background: #b91c1c; }
