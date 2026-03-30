@@ -45,8 +45,22 @@
     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(128,128,128,0.2); border-radius: 99px; }
     
-    .markdown-body pre { background: #1e1e1e; padding: 1rem; border-radius: 0.5rem; margin-bottom: 0.75rem; color: #d4d4d4; overflow-x: auto; font-size: 0.875rem;}
+    .markdown-body { min-width: 0; max-width: 100%; overflow-x: hidden; overflow-wrap: anywhere; word-break: break-word; }
+    .markdown-body > * { max-width: 100%; }
+    .markdown-body pre,
+    .markdown-body table,
+    .markdown-body .katex-display {
+      display: block;
+      max-width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+    .markdown-body pre { background: #1e1e1e; padding: 1rem; border-radius: 0.5rem; margin-bottom: 0.75rem; color: #d4d4d4; font-size: 0.875rem;}
     .markdown-body :not(pre) > code { background: var(--msg-user-bg); padding: 0.125rem 0.25rem; border-radius: 0.25rem; font-size: 0.875em; }
+    .markdown-body .katex-display { margin: 0.75rem 0; padding-bottom: 0.25rem; }
+    .markdown-body .katex { max-width: 100%; }
+    .markdown-body img { max-width: 100%; height: auto; }
     
     .cursor { display: inline-block; width: 2px; height: 1em; background: currentColor; vertical-align: text-bottom; margin-left: 2px; animation: blink 1s step-end infinite; }
     @keyframes blink { 50% { opacity: 0; } }
@@ -197,7 +211,7 @@
         </div>
     </div>
 
-    <div id="messages-wrapper" class="flex-1 overflow-y-auto w-full px-4 pt-2 custom-scrollbar">
+    <div id="messages-wrapper" class="flex-1 overflow-y-auto overflow-x-hidden w-full px-4 pt-2 custom-scrollbar">
         <div id="messages-container" class="max-w-3xl mx-auto pb-[180px]">
             <div id="empty-state" class="flex flex-col items-center justify-center h-[50vh] text-center opacity-100 transition-opacity">
                 <div class="w-12 h-12 bg-[var(--text-main)] rounded-full flex items-center justify-center text-[var(--bg-main)] text-xl mb-4 font-bold tracking-tighter">✦</div>
@@ -226,14 +240,14 @@
                 </div>
             </div>
             <div class="text-center text-[10px] text-[var(--text-muted)] mt-2">
-                AI 也可能会犯错。请核查重要信息。| v3.2-Docker-Setup
+                AI 也可能会犯错。请核查重要信息。| v3.3-Mobile-Math
             </div>
         </div>
     </div>
   </div>
 
-  <script src="/static/js/history.js?v=3.2"></script>
-  <script src="/static/js/chat.js?v=3.2"></script>
+  <script src="/static/js/history.js?v=3.3"></script>
+  <script src="/static/js/chat.js?v=3.3"></script>
   <script>lucide.createIcons();</script>
 </body>
 </html>
