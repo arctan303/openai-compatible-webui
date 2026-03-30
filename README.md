@@ -1,6 +1,6 @@
-# AI Chat
+# openai-compatible-webui
 
-一个基于 `FastAPI` 的聊天服务，支持两种存储模式：
+一个兼容 OpenAI API 格式的自部署 Web 聊天界面与管理后台，基于 `FastAPI` 构建，支持两种存储模式：
 
 - `PostgreSQL + Docker`：推荐用于正式部署
 - `SQLite 文件模式`：适合本地轻量使用或快速体验
