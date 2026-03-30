@@ -5,37 +5,38 @@ import mimetypes
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
+import re
 import httpx
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from fastapi import FastAPI, Request, Response, Depends, HTTPException, UploadFile, File, Form, Cookie
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 import database
-import setup_wizard
 from auth import create_access_token, decode_token
 from config import (
     MAX_UPLOAD_SIZE,
     ALLOWED_EXTENSIONS,
     SECRET_KEY,
     DATABASE_URL,
-    BOOTSTRAP_ADMIN_USERNAME,
-    BOOTSTRAP_SYSTEM_API_BASE,
-    BOOTSTRAP_SYSTEM_MODEL,
-    SETUP_WIZARD_ENABLED,
 )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if SECRET_KEY == "change-this-secret-key-in-production-please":
-        print("\u26a0️  WARNING: SECRET_KEY is using the insecure default value. Set a strong SECRET_KEY in your .env file!")
+    # SECRET_KEY fallback generates random on import if not in ENV
     await database.init_db()
     yield
 
 
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
@@ -70,6 +71,22 @@ async def get_current_user(request: Request):
     return user
 
 
+async def get_request_user_or_none(request: Request):
+    token = request.cookies.get("access_token")
+    if not token:
+        return None
+    payload = decode_token(token)
+    if not payload:
+        return None
+    user_id = payload.get("sub")
+    if not user_id:
+        return None
+    try:
+        return await database.get_user_by_id(int(user_id))
+    except Exception:
+        return None
+
+
 async def require_admin(user=Depends(get_current_user)):
     if not user["is_admin"]:
         raise HTTPException(status_code=403, detail="Admin only")
@@ -82,60 +99,34 @@ async def require_admin(user=Depends(get_current_user)):
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    token = request.cookies.get("access_token")
-    if token and decode_token(token):
+    user = await get_request_user_or_none(request)
+    if user:
         return templates.TemplateResponse("chat.html", {"request": request})
     return templates.TemplateResponse("login.html", {"request": request})
 
 
 @app.get("/chat", response_class=HTMLResponse)
-async def chat_page(request: Request, user=Depends(get_current_user)):
+async def chat_page(request: Request):
+    user = await get_request_user_or_none(request)
+    if not user:
+        return RedirectResponse(url="/")
     return templates.TemplateResponse("chat.html", {"request": request})
 
 
 @app.get("/chat/{conv_id}", response_class=HTMLResponse)
-async def chat_page_with_conversation(conv_id: str, request: Request, user=Depends(get_current_user)):
+async def chat_page_with_conversation(conv_id: str, request: Request):
+    user = await get_request_user_or_none(request)
+    if not user:
+        return RedirectResponse(url="/")
     return templates.TemplateResponse("chat.html", {"request": request, "conv_id": conv_id})
 
 
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_page(request: Request):
-    token = request.cookies.get("access_token")
-    if not token:
-        return RedirectResponse(url="/")
-    payload = decode_token(token)
-    if not payload:
-        return RedirectResponse(url="/")
-    user = await database.get_user_by_id(int(payload.get("sub")))
+    user = await get_request_user_or_none(request)
     if not user or not user["is_admin"]:
-        return RedirectResponse(url="/chat")
+        return RedirectResponse(url="/" if not user else "/chat")
     return templates.TemplateResponse("admin.html", {"request": request})
-
-
-@app.get("/setup", response_class=HTMLResponse)
-async def setup_page(request: Request):
-    if not SETUP_WIZARD_ENABLED:
-        return RedirectResponse(url="/admin")
-    token = request.cookies.get("access_token")
-    if not token:
-        return RedirectResponse(url="/")
-    payload = decode_token(token)
-    if not payload:
-        return RedirectResponse(url="/")
-    user = await database.get_user_by_id(int(payload.get("sub")))
-    if not user or not user["is_admin"]:
-        return RedirectResponse(url="/chat")
-
-    return templates.TemplateResponse(
-        "setup.html",
-        {
-            "request": request,
-            "database_url": DATABASE_URL,
-            "admin_username": BOOTSTRAP_ADMIN_USERNAME,
-            "system_api_base": BOOTSTRAP_SYSTEM_API_BASE,
-            "system_model": BOOTSTRAP_SYSTEM_MODEL,
-        },
-    )
 
 
 # ─────────────────────────────────────────────
@@ -147,17 +138,9 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class SetupInitializeRequest(BaseModel):
-    database_url: str
-    admin_username: str
-    admin_password: str
-    system_api_base: str
-    system_api_key: str = ""
-    system_model: str = "gpt-4o"
-
-
 @app.post("/api/auth/login")
-async def login(body: LoginRequest, response: Response):
+@limiter.limit("5/minute")
+async def login(request: Request, body: LoginRequest, response: Response):
     user = await database.get_user_by_username(body.username)
     if not user or not database.verify_password(body.password, user["password"]):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
@@ -185,68 +168,14 @@ async def login(body: LoginRequest, response: Response):
 
 @app.post("/api/auth/logout")
 async def logout(response: Response):
-    response.delete_cookie("access_token")
+    is_production = os.environ.get("ENV", "development") == "production"
+    response.delete_cookie(
+        key="access_token",
+        httponly=True,
+        samesite="lax",
+        secure=is_production
+    )
     return {"ok": True}
-
-
-@app.get("/api/setup/status")
-async def setup_status(admin=Depends(require_admin)):
-    if not SETUP_WIZARD_ENABLED:
-        raise HTTPException(status_code=403, detail="初始化向导已关闭，请改 .env 后重启服务")
-    return {
-        "database_url": DATABASE_URL,
-        "is_postgres": setup_wizard.is_postgres_url(DATABASE_URL),
-        "using_default_sqlite": DATABASE_URL == "sqlite:///data/chat.db",
-        "setup_wizard_enabled": SETUP_WIZARD_ENABLED,
-    }
-
-
-@app.post("/api/setup/initialize")
-async def setup_initialize(body: SetupInitializeRequest, admin=Depends(require_admin)):
-    if not SETUP_WIZARD_ENABLED:
-        raise HTTPException(status_code=403, detail="初始化向导已关闭，请改 .env 后重启服务")
-
-    database_url = body.database_url.strip()
-    admin_username = body.admin_username.strip()
-    admin_password = body.admin_password
-    system_api_base = body.system_api_base.strip()
-    system_api_key = body.system_api_key.strip()
-    system_model = body.system_model.strip() or "gpt-4o"
-
-    if not database_url:
-        raise HTTPException(status_code=400, detail="数据库连接不能为空")
-    if not admin_username:
-        raise HTTPException(status_code=400, detail="管理员用户名不能为空")
-    if not admin_password:
-        raise HTTPException(status_code=400, detail="管理员密码不能为空")
-    if not system_api_base:
-        raise HTTPException(status_code=400, detail="System API Base 不能为空")
-
-    try:
-        await setup_wizard.initialize_database(
-            database_url=database_url,
-            admin_username=admin_username,
-            admin_password=admin_password,
-            system_api_base=system_api_base,
-            system_api_key=system_api_key,
-            system_model=system_model,
-        )
-        setup_wizard.write_env_file(
-            database_url=database_url,
-            admin_username=admin_username,
-            admin_password=admin_password,
-            system_api_base=system_api_base,
-            system_api_key=system_api_key,
-            system_model=system_model,
-        )
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"初始化失败: {str(e)}")
-
-    return {
-        "ok": True,
-        "restart_required": database_url != DATABASE_URL,
-        "message": "初始化完成",
-    }
 
 
 @app.get("/api/auth/me")
@@ -316,23 +245,30 @@ async def chat_stream(body: ChatRequest, user=Depends(get_current_user)):
         payload["max_tokens"] = body.max_tokens
 
     async def generate():
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            async with client.stream(
-                "POST",
-                f"{api_base}/chat/completions",
-                json=payload,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-            ) as resp:
-                if resp.status_code != 200:
-                    body_text = await resp.aread()
-                    yield f"data: {json.dumps({'error': body_text.decode()})}\n\n"
-                    return
-                async for line in resp.aiter_lines():
-                    if line:
-                        yield f"{line}\n\n"
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                async with client.stream(
+                    "POST",
+                    f"{api_base}/chat/completions",
+                    json=payload,
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                ) as resp:
+                    if resp.status_code != 200:
+                        body_text = await resp.aread()
+                        yield f"data: {json.dumps({'error': body_text.decode()})}\n\n"
+                        yield "data: [DONE]\n\n"
+                        return
+                    async for line in resp.aiter_lines():
+                        if line:
+                            yield f"{line}\n\n"
+        except Exception as e:
+            print(f"Streaming error: {e}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        finally:
+            yield "data: [DONE]\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream", headers={
         "Cache-Control": "no-cache",
@@ -384,7 +320,9 @@ async def generate_title(conv_id: str, body: GenerateTitleRequest, user=Depends(
             )
             resp.raise_for_status()
             data = resp.json()
-            title = data["choices"][0]["message"]["content"].strip().strip('"').strip('《》')
+            title = data.get("choices", [{}])[0].get("message", {}).get("content", "新对话").strip().strip('"').strip('《》')
+            if not title:
+                title = "新对话"
             
             # Update database
             conv = await database.get_conversations(user["id"])
@@ -393,10 +331,12 @@ async def generate_title(conv_id: str, body: GenerateTitleRequest, user=Depends(
                 await database.save_conversation(conv_id, user["id"], title, target["messages"], target["model"])
             
             return {"title": title}
+    except httpx.HTTPStatusError as e:
+        print(f"Title generation API error: {e}")
+        return {"title": "新对话 (获取失败)"}
     except Exception as e:
         print(f"Title generation failed: {e}")
-        return {"title": None}
-
+        return {"title": "新对话"}
 
 # ─────────────────────────────────────────────
 # Models list
@@ -450,6 +390,9 @@ async def get_admin_models(api_base: str = "", api_key: str = "", admin=Depends(
         raise HTTPException(status_code=500, detail="系统未配置")
         
     actual_base = (api_base or system_cfg["api_base"]).rstrip("/")
+    if not actual_base.startswith("http://") and not actual_base.startswith("https://"):
+        raise HTTPException(status_code=400, detail="Invalid API Base URL scheme. Must be http:// or https://")
+
     actual_key = api_key if api_key and '*' not in api_key else system_cfg["api_key"]
     
     try:
@@ -483,7 +426,10 @@ async def upload_file(file: UploadFile = File(...), user=Depends(get_current_use
         raise HTTPException(status_code=400, detail="文件过大（最大 10MB）")
 
     mime = mimetypes.guess_type(file.filename or "")[0] or "application/octet-stream"
-    is_image = mime.startswith("image/")
+    is_image = mime in ["image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp"]
+
+    if mime.startswith("image/") and not is_image:
+        raise HTTPException(status_code=400, detail="不支持的图片格式（存在安全风险）")
 
     if is_image:
         b64 = base64.b64encode(content).decode()
@@ -574,6 +520,20 @@ class CreateUserRequest(BaseModel):
     is_admin: int = 0
     allowed_models: Optional[List[str]] = None
 
+    @field_validator("password")
+    def validate_password(cls, v: str) -> str:
+        if v is None or v == "":
+            raise ValueError('Password cannot be empty')
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters long')
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Password must contain at least one uppercase letter')
+        if not re.search(r'[a-z]', v):
+            raise ValueError('Password must contain at least one lowercase letter')
+        if not re.search(r'[0-9]', v):
+            raise ValueError('Password must contain at least one digit')
+        return v
+
 
 @app.post("/api/admin/users")
 async def create_user_route(body: CreateUserRequest, admin=Depends(require_admin)):
@@ -595,6 +555,20 @@ class UpdateUserRequest(BaseModel):
     is_admin: Optional[int] = None
     allowed_models: Optional[List[str]] = None  # None = unchanged, [] = all allowed
 
+    @field_validator("password")
+    def validate_password(cls, v: Optional[str]) -> Optional[str]:
+        if not v:
+            return v
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters long')
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Password must contain at least one uppercase letter')
+        if not re.search(r'[a-z]', v):
+            raise ValueError('Password must contain at least one lowercase letter')
+        if not re.search(r'[0-9]', v):
+            raise ValueError('Password must contain at least one digit')
+        return v
+
 
 @app.put("/api/admin/users/{user_id}")
 async def update_user_route(user_id: int, body: UpdateUserRequest, admin=Depends(require_admin)):
@@ -602,9 +576,9 @@ async def update_user_route(user_id: int, body: UpdateUserRequest, admin=Depends
     data = {}
     for k, v in raw.items():
         if k == "allowed_models":
-            # Explicitly serialize: empty list = all allowed (NULL), list = JSON
+            # Empty list `[]` means allowing all (or explicitly bypassing). Save as JSON '[]' to database.
             if v is not None:
-                data["allowed_models"] = json.dumps(v) if v else None
+                data["allowed_models"] = json.dumps(v)
         elif k == "password":
             if v:  # Only update password if not empty
                 data["password"] = v

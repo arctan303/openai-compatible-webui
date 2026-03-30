@@ -5,6 +5,14 @@
 const History = (() => {
   let conversations = [];
 
+  async function ensureAuthorized(res) {
+    if (res.status === 401) {
+      window.location.href = '/';
+      throw new Error('登录已过期');
+    }
+    return res;
+  }
+
   function createConversationId() {
     if (window.crypto && typeof window.crypto.randomUUID === 'function') {
       return window.crypto.randomUUID();
@@ -18,6 +26,7 @@ const History = (() => {
   async function loadFromServer() {
     try {
       const res = await fetch('/api/history');
+      await ensureAuthorized(res);
       if (res.ok) {
         conversations = await res.json();
       }
@@ -51,11 +60,12 @@ const History = (() => {
 
   async function saveToServer(conv) {
     try {
-      await fetch(`/api/history/${conv.id}`, {
+      const res = await fetch(`/api/history/${conv.id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: conv.title, messages: conv.messages, model: conv.model })
       });
+      await ensureAuthorized(res);
     } catch (e) {
       console.error('Failed to sync history to cloud', e);
     }
@@ -97,7 +107,8 @@ const History = (() => {
   async function remove(id) {
     conversations = conversations.filter(c => c.id !== id);
     try {
-      await fetch(`/api/history/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/history/${id}`, { method: 'DELETE' });
+      await ensureAuthorized(res);
     } catch (e) {
       console.error('Delete sync failed', e);
     }

@@ -1,9 +1,10 @@
 import os
+import secrets
 from dotenv import load_dotenv
 
 load_dotenv()
 
-SECRET_KEY = os.getenv("SECRET_KEY", "change-this-secret-key-in-production-please")
+SECRET_KEY = os.getenv("SECRET_KEY", secrets.token_urlsafe(32))
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///data/chat.db")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
@@ -16,4 +17,3 @@ BOOTSTRAP_ADMIN_PASSWORD = os.getenv("BOOTSTRAP_ADMIN_PASSWORD", os.getenv("ADMI
 BOOTSTRAP_SYSTEM_API_KEY = os.getenv("BOOTSTRAP_SYSTEM_API_KEY", os.getenv("ADMIN_API_KEY", ""))
 BOOTSTRAP_SYSTEM_API_BASE = os.getenv("BOOTSTRAP_SYSTEM_API_BASE", os.getenv("ADMIN_API_BASE", "https://api.openai.com/v1"))
 BOOTSTRAP_SYSTEM_MODEL = os.getenv("BOOTSTRAP_SYSTEM_MODEL", "gpt-4o")
-SETUP_WIZARD_ENABLED = os.getenv("SETUP_WIZARD_ENABLED", "true").lower() == "true"

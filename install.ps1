@@ -72,7 +72,6 @@ $systemApiBase = Read-Default "Bootstrap system API base" "https://api.openai.co
 $systemApiKey = Read-Default "Bootstrap system API key" ""
 $systemModel = Read-Default "Bootstrap system model" "gpt-4o"
 $secretKey = Read-Default "App SECRET_KEY" (New-RandomSecret)
-$setupWizardEnabled = "true"
 
 $envLines = @()
 if (Test-Path -LiteralPath ".env") {
@@ -106,8 +105,6 @@ $envLines = Set-OrAddLine $envLines "BOOTSTRAP_ADMIN_PASSWORD" $adminPassword
 $envLines = Set-OrAddLine $envLines "BOOTSTRAP_SYSTEM_API_BASE" $systemApiBase
 $envLines = Set-OrAddLine $envLines "BOOTSTRAP_SYSTEM_API_KEY" $systemApiKey
 $envLines = Set-OrAddLine $envLines "BOOTSTRAP_SYSTEM_MODEL" $systemModel
-$envLines = Set-OrAddLine $envLines "SETUP_WIZARD_ENABLED" $setupWizardEnabled
-
 Set-Content -LiteralPath ".env" -Value $envLines
 
 Write-Host ""

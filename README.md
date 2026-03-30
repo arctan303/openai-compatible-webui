@@ -1,39 +1,50 @@
 # openai-compatible-webui
 
-一个兼容 OpenAI API 格式的自部署 Web 聊天界面与管理后台，基于 `FastAPI` 构建，支持两种存储模式：
-
-- `PostgreSQL + Docker`：推荐用于正式部署
-- `SQLite 文件模式`：适合本地轻量使用或快速体验
-
-项目包含：
-
-- 聊天页面与历史记录
-- 管理员后台
-- 系统模型配置与前端展示名称映射
-- 首次初始化向导 `/setup`
-- Docker 一键部署
+一个轻量、简约、可自部署的 OpenAI 接口兼容聊天页面，支持用户管理、模型映射、历史会话和 Docker/SQLite 双模式部署。
 
 ## 功能概览
 
+- 兼容 OpenAI API 格式的聊天接口
 - 支持普通用户与管理员账户
-- 支持系统级模型配置与用户级模型限制
-- 支持历史会话保存、刷新、直链打开
-- 支持 Markdown、代码高亮、数学公式渲染
-- 支持首次初始化数据库与管理员配置
+- 支持系统模型配置、模型展示名称映射
+- 支持历史会话保存、搜索与直链打开
+- 支持 Markdown、代码高亮与数学公式渲染
+- 支持 SQLite 与 PostgreSQL 两种存储模式
 
-### 聊天页面预览
+## 聊天页面预览
 
-首页/聊天页面示意：
+主页 / 聊天页面示意：
 
 ![主页预览图](./images/home.png)
 
+## 管理后台
+
+管理员可用于：
+
+- 配置系统 API Base / API Key / 默认模型
+- 获取系统模型并设置前端展示名称
+- 管理用户、模型白名单与管理员权限
+
+后台页面示意：
+
+![后台管理页面](./images/admin.png)
+
+## 技术栈
+
+- FastAPI
+- Jinja2
+- httpx
+- SlowAPI
+- SQLite / PostgreSQL
+- Vanilla JavaScript
+
 ## 运行要求
 
-根据你的使用方式，准备以下环境之一：
+根据你的使用方式，准备以下环境之一。
 
 ### 方式一：PostgreSQL + Docker
 
-推荐用于服务部署。
+推荐用于正式部署。
 
 需要：
 
@@ -64,7 +75,6 @@
 2. `SQLite file mode`
 
 脚本会自动写入 `.env`。
-
 如果你选择 PostgreSQL 模式，并且本机已安装 Docker，脚本还可以直接启动服务。
 
 ## 部署方式一：PostgreSQL + Docker
@@ -85,7 +95,7 @@ Copy-Item .env.example .env
 .\install.ps1
 ```
 
-`.env` 中与 Docker/PostgreSQL 相关的重要配置如下：
+`.env` 中与 Docker / PostgreSQL 相关的重要配置如下：
 
 ```env
 DATABASE_URL=postgresql://ai_chat:change-me@postgres:5432/ai_chat
@@ -107,7 +117,7 @@ docker compose up -d --build
 - `app`
 - `postgres`
 
-默认的编排文件见 [docker-compose.yml](C:/git/ai-chat/docker-compose.yml)。
+编排文件见 [docker-compose.yml](./docker-compose.yml)。
 
 ### 3. 首次登录
 
@@ -138,7 +148,7 @@ DATABASE_URL=sqlite:///data/chat.db
 
 数据库文件默认位置：
 
-- [chat.db](C:/git/ai-chat/data/chat.db)
+- [data/chat.db](./data/chat.db)
 
 ### 本地运行
 
@@ -156,9 +166,9 @@ pip install -r requirements.txt
 py -3.13 main.py
 ```
 
-## 初始化规则
+## 配置规则
 
-系统把配置分成两类：
+系统把配置分成两类。
 
 ### 1. 启动期配置
 
@@ -187,46 +197,11 @@ py -3.13 main.py
 - `.env` 负责启动和首次初始化
 - 数据库负责运行中的业务配置
 
-## `/setup` 一次性初始化向导
-
-项目提供管理员专用的初始化向导：
-
-```text
-/setup
-```
-
-规则如下：
-
-- 必须先使用管理员账号登录
-- 只有管理员可以访问 `/setup`
-- `/setup` 是否开启由 `SETUP_WIZARD_ENABLED` 控制
-- 初始化成功后，系统会把 `.env` 中的 `SETUP_WIZARD_ENABLED=false`
-- 之后该入口会关闭
-- 如果后续还要修改数据库连接或 bootstrap 配置，应直接修改 `.env` 并重启服务
-
-默认配置：
-
-```env
-SETUP_WIZARD_ENABLED=true
-```
-
-## 管理后台
-
-管理员后台可用于：
-
-- 配置系统 API Base / API Key / 默认模型
-- 获取系统模型并设置前端展示名称
-- 管理用户、模型白名单和管理员权限
-
-后台界面示意：
-
-![后台管理页面](./images/admin.png)
-
 ## `.env.example` 说明
 
 示例配置文件见：
 
-- [.env.example](C:/git/ai-chat/.env.example)
+- [.env.example](./.env.example)
 
 其中包含：
 
@@ -234,7 +209,6 @@ SETUP_WIZARD_ENABLED=true
 - PostgreSQL 模式示例
 - Docker 端口配置
 - 默认管理员 bootstrap 配置
-- 一次性初始化向导开关
 
 ## 部署注意事项
 
@@ -259,14 +233,3 @@ docker compose down
 ```powershell
 docker compose down -v
 ```
-
-### 本地 SQLite 运行
-
-```powershell
-py -3.13 main.py
-```
-
-## 说明
-
-当前仓库内的 `install.ps1` 是 Windows PowerShell 安装脚本。  
-如果你在 Linux 服务器上部署，建议直接手动配置 `.env` 后使用 Docker 启动。

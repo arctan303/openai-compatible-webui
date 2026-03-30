@@ -180,6 +180,14 @@ function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+async function ensureAuthorized(res) {
+  if (res.status === 401) {
+    window.location.href = '/';
+    throw new Error('登录已过期');
+  }
+  return res;
+}
+
 function getModelLabel(modelId) {
   if (!modelId) return '模型';
   return modelDisplayMap[modelId] || modelId;
@@ -187,6 +195,15 @@ function getModelLabel(modelId) {
 
 function scrollToBottom(smooth = true) {
   messagesWrapper.scrollTo({ top: messagesWrapper.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
+}
+
+function isMobileViewport() {
+  return !isDesktopViewport();
+}
+
+function updateViewportHeight() {
+  const viewportHeight = window.visualViewport?.height || window.innerHeight;
+  document.documentElement.style.setProperty('--app-height', `${Math.round(viewportHeight)}px`);
 }
 
 function autoResize() {
@@ -255,6 +272,7 @@ async function uploadFile(file) {
   formData.append('file', file);
   try {
     const res = await fetch('/api/upload', { method: 'POST', body: formData });
+    await ensureAuthorized(res);
     if (!res.ok) throw new Error();
     const attachment = await res.json();
     const attachIdx = pendingAttachments.findIndex(a => a.id === attachId);
@@ -341,6 +359,7 @@ function setStreaming(state) {
 async function loadUser() {
   try {
     const res = await fetch('/api/auth/me');
+    await ensureAuthorized(res);
     if (!res.ok) { window.location.href = '/'; return; }
     currentUser = await res.json();
     modelDisplayMap = currentUser.model_aliases || {};
@@ -363,6 +382,7 @@ async function loadUser() {
 async function loadModels() {
   try {
     const res = await fetch('/api/models');
+    await ensureAuthorized(res);
     if (!res.ok) throw new Error();
     const data = await res.json();
     let models = data.data || [];
@@ -574,7 +594,8 @@ window.addEventListener('popstate', () => {
 });
 
 // ─── Chat Lifecycle ───────────────────────────────────────────────────────────
-function startNewChat() {
+function startNewChat(options = {}) {
+  const { focusInput = false } = options;
   currentConvId = null;
   syncConversationUrl(null);
   messagesContainer.querySelectorAll('.message-row').forEach(e => e.remove());
@@ -585,10 +606,15 @@ function startNewChat() {
   chatInput.value = '';
   chatInput.style.height = 'auto';
   updateSendBtn();
-  chatInput.focus();
+  if (focusInput && !isMobileViewport()) {
+    chatInput.focus();
+  }
 }
 
-if (newChatBtn) newChatBtn.addEventListener('click', () => { startNewChat(); if (window.innerWidth <= 768) closeSidebar(); });
+if (newChatBtn) newChatBtn.addEventListener('click', () => {
+  startNewChat({ focusInput: true });
+  if (window.innerWidth <= 768) closeSidebar();
+});
 
 function loadConversation(id) {
   const conv = History.get(id);
@@ -706,6 +732,7 @@ async function sendMessage() {
       body: JSON.stringify({ messages: apiMessages, model: selectedModel }),
       signal: abortController.signal,
     });
+    await ensureAuthorized(res);
     if (!res.ok) throw new Error((await res.json().catch(()=>({}))).detail || '请求失败');
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -754,6 +781,7 @@ async function sendMessage() {
                    headers: { 'Content-Type': 'application/json' },
                    body: JSON.stringify({ messages: currentConv.messages, model: selectedModelId })
                 });
+                await ensureAuthorized(titleRes);
                 if (titleRes.ok) {
                     const data = await titleRes.json();
                     if (data.title) { currentConv.title = data.title; renderHistorySidebar(searchInput?.value || ''); }
@@ -808,9 +836,16 @@ window.addEventListener('resize', () => {
     applySidebarState();
     wasMobile = isMobile;
   }
+  updateViewportHeight();
 });
 
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', updateViewportHeight);
+  window.visualViewport.addEventListener('scroll', updateViewportHeight);
+}
+
 (async () => {
+  updateViewportHeight();
   await loadUser();
   await loadModels();
   await refreshHistory();
@@ -822,6 +857,6 @@ window.addEventListener('resize', () => {
     }
   }
   applySidebarState();
-  if (chatInput) chatInput.focus();
+  autoResize();
   updateSendBtn();
 })();
