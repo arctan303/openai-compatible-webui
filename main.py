@@ -129,6 +129,14 @@ async def admin_page(request: Request):
     return templates.TemplateResponse("admin.html", {"request": request})
 
 
+@app.get("/admin/usage", response_class=HTMLResponse)
+async def admin_usage_page(request: Request):
+    user = await get_request_user_or_none(request)
+    if not user or not user["is_admin"]:
+        return RedirectResponse(url="/" if not user else "/chat")
+    return templates.TemplateResponse("admin_usage.html", {"request": request})
+
+
 # ─────────────────────────────────────────────
 # Auth API
 # ─────────────────────────────────────────────
@@ -245,29 +253,67 @@ async def chat_stream(body: ChatRequest, user=Depends(get_current_user)):
         payload["max_tokens"] = body.max_tokens
 
     async def generate():
+        prompt_tokens = 0
+        completion_tokens = 0
+        total_tokens = 0
+        usage_recorded = False
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
-                async with client.stream(
-                    "POST",
-                    f"{api_base}/chat/completions",
-                    json=payload,
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                    },
-                ) as resp:
-                    if resp.status_code != 200:
-                        body_text = await resp.aread()
-                        yield f"data: {json.dumps({'error': body_text.decode()})}\n\n"
-                        yield "data: [DONE]\n\n"
-                        return
-                    async for line in resp.aiter_lines():
-                        if line:
-                            yield f"{line}\n\n"
+                request_payload = dict(payload)
+                request_payload["stream_options"] = {"include_usage": True}
+
+                while True:
+                    async with client.stream(
+                        "POST",
+                        f"{api_base}/chat/completions",
+                        json=request_payload,
+                        headers={
+                            "Authorization": f"Bearer {api_key}",
+                            "Content-Type": "application/json",
+                        },
+                    ) as resp:
+                        if resp.status_code != 200:
+                            body_text = await resp.aread()
+                            error_text = body_text.decode()
+                            if "stream_options" in error_text and "include_usage" in request_payload.get("stream_options", {}):
+                                request_payload.pop("stream_options", None)
+                                continue
+                            yield f"data: {json.dumps({'error': error_text})}\n\n"
+                            yield "data: [DONE]\n\n"
+                            return
+
+                        usage_recorded = True
+                        async for line in resp.aiter_lines():
+                            if line:
+                                if line.startswith("data:"):
+                                    data = line[5:].strip()
+                                    if data and data != "[DONE]":
+                                        try:
+                                            parsed = json.loads(data)
+                                            usage = parsed.get("usage") or {}
+                                            if usage:
+                                                prompt_tokens = max(prompt_tokens, int(usage.get("prompt_tokens") or 0))
+                                                completion_tokens = max(completion_tokens, int(usage.get("completion_tokens") or 0))
+                                                total_tokens = max(total_tokens, int(usage.get("total_tokens") or 0))
+                                        except Exception:
+                                            pass
+                                yield f"{line}\n\n"
+                        break
         except Exception as e:
             print(f"Streaming error: {e}")
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
         finally:
+            if usage_recorded:
+                try:
+                    await database.record_model_usage(
+                        user["id"],
+                        model,
+                        prompt_tokens=prompt_tokens,
+                        completion_tokens=completion_tokens,
+                        total_tokens=total_tokens,
+                    )
+                except Exception as usage_error:
+                    print(f"Usage tracking error: {usage_error}")
             yield "data: [DONE]\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream", headers={
@@ -510,6 +556,29 @@ async def list_users(admin=Depends(require_admin)):
             else:
                 u["api_key"] = "********"
     return users
+
+
+@app.get("/api/admin/usage")
+async def get_admin_usage(admin=Depends(require_admin)):
+    users = await database.get_all_users()
+    username_map = {user["id"]: user["username"] for user in users}
+    rows = await database.get_model_usage_rows()
+
+    total_requests = sum(int(row.get("request_count", 0) or 0) for row in rows)
+    total_tokens = sum(int(row.get("total_tokens", 0) or 0) for row in rows)
+
+    for row in rows:
+        row["username"] = username_map.get(row["user_id"], f"User {row['user_id']}")
+
+    return {
+        "summary": {
+            "users": len(username_map),
+            "models": len(rows),
+            "requests": total_requests,
+            "tokens": total_tokens,
+        },
+        "rows": rows,
+    }
 
 
 class CreateUserRequest(BaseModel):

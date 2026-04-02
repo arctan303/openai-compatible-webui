@@ -101,9 +101,26 @@ async def _init_postgres():
             )
         """)
 
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS model_usage (
+                user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                model VARCHAR NOT NULL,
+                request_count INT NOT NULL DEFAULT 0,
+                prompt_tokens INT NOT NULL DEFAULT 0,
+                completion_tokens INT NOT NULL DEFAULT 0,
+                total_tokens INT NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id, model)
+            )
+        """)
+
         await conn.execute("ALTER TABLE conversations ADD COLUMN IF NOT EXISTS model VARCHAR NOT NULL DEFAULT 'gpt-4o'")
         await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS allowed_models VARCHAR DEFAULT NULL")
         await conn.execute("ALTER TABLE system_config ADD COLUMN IF NOT EXISTS model_aliases TEXT")
+        await conn.execute("ALTER TABLE model_usage ADD COLUMN IF NOT EXISTS prompt_tokens INT NOT NULL DEFAULT 0")
+        await conn.execute("ALTER TABLE model_usage ADD COLUMN IF NOT EXISTS completion_tokens INT NOT NULL DEFAULT 0")
+        await conn.execute("ALTER TABLE model_usage ADD COLUMN IF NOT EXISTS total_tokens INT NOT NULL DEFAULT 0")
 
         system_count = await conn.fetchval("SELECT COUNT(*) FROM system_config")
         if system_count == 0:
@@ -176,6 +193,20 @@ async def _init_sqlite():
             )
         """)
 
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS model_usage (
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                model TEXT NOT NULL,
+                request_count INTEGER NOT NULL DEFAULT 0,
+                prompt_tokens INTEGER NOT NULL DEFAULT 0,
+                completion_tokens INTEGER NOT NULL DEFAULT 0,
+                total_tokens INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id, model)
+            )
+        """)
+
         try:
             await conn.execute("ALTER TABLE conversations ADD COLUMN model TEXT NOT NULL DEFAULT 'gpt-4o'")
         except Exception:
@@ -188,6 +219,21 @@ async def _init_sqlite():
 
         try:
             await conn.execute("ALTER TABLE system_config ADD COLUMN model_aliases TEXT")
+        except Exception:
+            pass
+
+        try:
+            await conn.execute("ALTER TABLE model_usage ADD COLUMN prompt_tokens INTEGER NOT NULL DEFAULT 0")
+        except Exception:
+            pass
+
+        try:
+            await conn.execute("ALTER TABLE model_usage ADD COLUMN completion_tokens INTEGER NOT NULL DEFAULT 0")
+        except Exception:
+            pass
+
+        try:
+            await conn.execute("ALTER TABLE model_usage ADD COLUMN total_tokens INTEGER NOT NULL DEFAULT 0")
         except Exception:
             pass
 
@@ -380,6 +426,88 @@ async def delete_user(user_id: int):
     async with _sqlite_conn() as conn:
         await conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
         await conn.commit()
+
+
+async def record_model_usage(user_id: int, model: str, prompt_tokens: int = 0, completion_tokens: int = 0, total_tokens: int = 0):
+    if not model:
+        return
+
+    prompt_tokens = max(0, int(prompt_tokens or 0))
+    completion_tokens = max(0, int(completion_tokens or 0))
+    total_tokens = max(0, int(total_tokens or (prompt_tokens + completion_tokens)))
+
+    if IS_POSTGRES:
+        pool = await get_db_pool()
+        await pool.execute(
+            """
+            INSERT INTO model_usage (user_id, model, request_count, prompt_tokens, completion_tokens, total_tokens, updated_at)
+            VALUES ($1, $2, 1, $3, $4, $5, CURRENT_TIMESTAMP)
+            ON CONFLICT (user_id, model) DO UPDATE SET
+                request_count = model_usage.request_count + 1,
+                prompt_tokens = model_usage.prompt_tokens + EXCLUDED.prompt_tokens,
+                completion_tokens = model_usage.completion_tokens + EXCLUDED.completion_tokens,
+                total_tokens = model_usage.total_tokens + EXCLUDED.total_tokens,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            user_id,
+            model,
+            prompt_tokens,
+            completion_tokens,
+            total_tokens,
+        )
+        return
+
+    async with _sqlite_conn() as conn:
+        await conn.execute(
+            """
+            INSERT INTO model_usage (user_id, model, request_count, prompt_tokens, completion_tokens, total_tokens, created_at, updated_at)
+            VALUES (?, ?, 1, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ON CONFLICT(user_id, model) DO UPDATE SET
+                request_count = request_count + 1,
+                prompt_tokens = prompt_tokens + excluded.prompt_tokens,
+                completion_tokens = completion_tokens + excluded.completion_tokens,
+                total_tokens = total_tokens + excluded.total_tokens,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (user_id, model, prompt_tokens, completion_tokens, total_tokens),
+        )
+        await conn.commit()
+
+
+async def get_model_usage_rows():
+    if IS_POSTGRES:
+        pool = await get_db_pool()
+        rows = await pool.fetch(
+            """
+            SELECT user_id, model, request_count, prompt_tokens, completion_tokens, total_tokens, created_at, updated_at
+            FROM model_usage
+            ORDER BY total_tokens DESC, request_count DESC, updated_at DESC, user_id ASC, model ASC
+            """
+        )
+        return [
+            {
+                "user_id": row["user_id"],
+                "model": row["model"],
+                "request_count": row["request_count"],
+                "prompt_tokens": row["prompt_tokens"],
+                "completion_tokens": row["completion_tokens"],
+                "total_tokens": row["total_tokens"],
+                "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+                "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
+            }
+            for row in rows
+        ]
+
+    async with _sqlite_conn() as conn:
+        cursor = await conn.execute(
+            """
+            SELECT user_id, model, request_count, prompt_tokens, completion_tokens, total_tokens, created_at, updated_at
+            FROM model_usage
+            ORDER BY total_tokens DESC, request_count DESC, updated_at DESC, user_id ASC, model ASC
+            """
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
 
 
 def verify_password(plain: str, hashed: str) -> bool:

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>使用量统计 - AI Chat</title>
+  <link rel="stylesheet" href="/static/css/style.css?v=2.5" />
+  <script>
+    (function() {
+      const theme = localStorage.getItem('theme') || 'auto';
+      const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      function applyTheme(t) {
+        if (t === 'dark' || (t === 'auto' && darkQuery.matches)) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      }
+      applyTheme(theme);
+      darkQuery.addEventListener('change', () => {
+        if (localStorage.getItem('theme') === 'auto') applyTheme('auto');
+      });
+    })();
+  </script>
+</head>
+<body style="overflow:auto;height:auto">
+  <div class="admin-shell">
+    <nav class="admin-nav">
+      <div class="admin-nav-brand">
+        <div class="dot">AI</div>
+        AI Chat
+      </div>
+      <span style="color:var(--border);margin:0 .5rem">/</span>
+      <span style="font-size:.875rem;color:var(--text-muted)">使用量统计</span>
+      <div class="spacer"></div>
+      <a href="/admin">用户管理</a>
+      <a href="/chat">返回聊天</a>
+    </nav>
+
+    <div class="admin-body" style="display:grid;gap:1rem">
+      <div class="admin-header">
+        <h1 class="admin-title">模型使用量</h1>
+      </div>
+
+      <div class="card" style="padding:1rem 1.2rem">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
+          <div class="card" style="padding:.9rem">
+            <div style="font-size:.8rem;color:var(--text-muted)">用户数</div>
+            <div id="summary-users" style="font-size:1.5rem;font-weight:700;margin-top:.25rem">-</div>
+          </div>
+          <div class="card" style="padding:.9rem">
+            <div style="font-size:.8rem;color:var(--text-muted)">模型项</div>
+            <div id="summary-models" style="font-size:1.5rem;font-weight:700;margin-top:.25rem">-</div>
+          </div>
+          <div class="card" style="padding:.9rem">
+            <div style="font-size:.8rem;color:var(--text-muted)">请求次数</div>
+            <div id="summary-requests" style="font-size:1.5rem;font-weight:700;margin-top:.25rem">-</div>
+          </div>
+          <div class="card" style="padding:.9rem">
+            <div style="font-size:.8rem;color:var(--text-muted)">总 Token</div>
+            <div id="summary-tokens" style="font-size:1.5rem;font-weight:700;margin-top:.25rem">-</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>用户</th>
+                <th>总 Token</th>
+                <th>总请求次数</th>
+                <th>模型明细</th>
+                <th>最近更新</th>
+              </tr>
+            </thead>
+            <tbody id="usage-tbody">
+              <tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:2rem">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const tbody = document.getElementById('usage-tbody');
+
+    function esc(s) {
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function formatNum(value) {
+      return Number(value || 0).toLocaleString('zh-CN');
+    }
+
+    function setSummary(summary) {
+      document.getElementById('summary-users').textContent = formatNum(summary.users);
+      document.getElementById('summary-models').textContent = formatNum(summary.models);
+      document.getElementById('summary-requests').textContent = formatNum(summary.requests);
+      document.getElementById('summary-tokens').textContent = formatNum(summary.tokens);
+    }
+
+    function renderRows(rows) {
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-muted);padding:2rem">暂无使用量记录</td></tr>';
+        return;
+      }
+
+      const grouped = new Map();
+      rows.forEach(row => {
+        const key = String(row.user_id);
+        if (!grouped.has(key)) {
+          grouped.set(key, {
+            user_id: row.user_id,
+            username: row.username || `User ${row.user_id}`,
+            total_tokens: 0,
+            total_requests: 0,
+            latest_updated_at: row.updated_at || '',
+            items: [],
+          });
+        }
+        const group = grouped.get(key);
+        group.total_tokens += Number(row.total_tokens || 0);
+        group.total_requests += Number(row.request_count || 0);
+        if ((row.updated_at || '') > group.latest_updated_at) {
+          group.latest_updated_at = row.updated_at || '';
+        }
+        group.items.push(row);
+      });
+
+      const groups = Array.from(grouped.values()).sort((a, b) => {
+        if (b.total_tokens !== a.total_tokens) return b.total_tokens - a.total_tokens;
+        if (b.total_requests !== a.total_requests) return b.total_requests - a.total_requests;
+        return a.username.localeCompare(b.username, 'zh-CN');
+      });
+
+      tbody.innerHTML = groups.map(group => {
+        const detailHtml = group.items
+          .sort((a, b) => {
+            if ((b.total_tokens || 0) !== (a.total_tokens || 0)) return (b.total_tokens || 0) - (a.total_tokens || 0);
+            return (b.request_count || 0) - (a.request_count || 0);
+          })
+          .map(item => `
+            <div style="display:grid;grid-template-columns:minmax(0,1.6fr) .8fr .8fr .8fr .7fr;gap:10px;padding:.45rem .6rem;border:1px solid var(--border);border-radius:10px;background:var(--bg);font-size:.78rem">
+              <code style="font-size:.75rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(item.model || '-')}</code>
+              <span>输入 ${formatNum(item.prompt_tokens)}</span>
+              <span>输出 ${formatNum(item.completion_tokens)}</span>
+              <strong>总计 ${formatNum(item.total_tokens)}</strong>
+              <span style="color:var(--text-muted)">${formatNum(item.request_count)} 次</span>
+            </div>
+          `)
+          .join('');
+
+        return `
+        <tr>
+          <td><strong>${esc(group.username)}</strong></td>
+          <td><strong>${formatNum(group.total_tokens)}</strong></td>
+          <td>${formatNum(group.total_requests)}</td>
+          <td>
+            <div style="display:grid;gap:8px;min-width:420px">
+              ${detailHtml}
+            </div>
+          </td>
+          <td style="color:var(--text-muted);font-size:.8rem">${esc(group.latest_updated_at || '-')}</td>
+        </tr>
+      `;
+      }).join('');
+    }
+
+    async function loadUsage() {
+      const res = await fetch('/api/admin/usage');
+      if (!res.ok) {
+        window.location.href = '/';
+        return;
+      }
+
+      const data = await res.json();
+      setSummary(data.summary || { users: 0, models: 0, requests: 0, tokens: 0 });
+      renderRows(data.rows || []);
+    }
+
+    loadUsage();
+  </script>
+</body>
+</html>

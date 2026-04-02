@@ -149,6 +149,11 @@ function renderAssistantContent(element, text) {
   if (window.lucide) window.lucide.createIcons();
 }
 
+function renderStreamingAssistantContent(element, text) {
+  if (!element) return;
+  element.innerHTML = `${esc(text).replace(/\n/g, '<br>')}<span class="cursor"></span>`;
+}
+
 function rerenderAssistantMessages() {
   document.querySelectorAll('.message-row .markdown-body').forEach(element => {
     const text = element?.dataset?.rawText;
@@ -195,6 +200,15 @@ function getModelLabel(modelId) {
 
 function scrollToBottom(smooth = true) {
   messagesWrapper.scrollTo({ top: messagesWrapper.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
+}
+
+let pendingScrollFrame = null;
+function queueScrollToBottom(smooth = false) {
+  if (pendingScrollFrame) return;
+  pendingScrollFrame = requestAnimationFrame(() => {
+    scrollToBottom(smooth);
+    pendingScrollFrame = null;
+  });
 }
 
 function isMobileViewport() {
@@ -721,8 +735,8 @@ async function sendMessage() {
   const conv = History.get(currentConvId);
   const apiMessages = (conv?.messages || []).map(m => ({ role: m.role, content: m.content }));
   const selectedModel = selectedModelId || currentUser?.model || 'gpt-4o';
-  setStreaming(true); scrollToBottom();
-  const contentEl = createAssistantMessage(); scrollToBottom();
+  setStreaming(true); queueScrollToBottom();
+  const contentEl = createAssistantMessage(); queueScrollToBottom();
   abortController = new AbortController();
   let fullText = '';
   try {
@@ -755,9 +769,8 @@ async function sendMessage() {
           if (delta) {
             fullText += delta;
             contentEl.dataset.rawText = fullText;
-            renderAssistantContent(contentEl, fullText);
-            contentEl.innerHTML += '<span class="cursor"></span>';
-            scrollToBottom(false);
+            renderStreamingAssistantContent(contentEl, fullText);
+            queueScrollToBottom(false);
           }
         } catch (e) {}
       }
@@ -789,7 +802,7 @@ async function sendMessage() {
             } catch (e) {}
         })();
     }
-    setStreaming(false); renderHistorySidebar(searchInput?.value || ''); scrollToBottom(); updateSendBtn();
+    setStreaming(false); renderHistorySidebar(searchInput?.value || ''); queueScrollToBottom(); updateSendBtn();
   }
 }
 
